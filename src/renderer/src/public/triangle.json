@@ -1,0 +1,3 @@
+{
+    "method":"var centerX = arguments[0];var centerY = arguments[1];var size = 50;var x = centerX - size / 2;var y = centerY - size / 2;arguments[2].beginPath();arguments[2].moveTo(centerX, centerY - size);arguments[2].lineTo(centerX - size / 2, centerY + size / 2);arguments[2].lineTo(centerX + size / 2, centerY + size / 2);arguments[2].closePath();arguments[2].strokeStyle = 'blue';arguments[2].stroke();"
+}

@@ -5,12 +5,21 @@
     <title>cleanCAD</title>
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      content="default-src 'self'; script-src 'self' 'unsafe-eval' https://at.alicdn.com http://localhost:*; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
     />
   </head>
 
   <body>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
+    <script src="https://at.alicdn.com/t/c/font_4778454_empu0ari79.js"></script>
   </body>
+
+  <style>
+    *{
+      overflow: hidden;
+      padding: 0;
+      margin: 0;
+    }
+  </style>
 </html>

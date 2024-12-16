@@ -1,21 +1,93 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
-import { join } from 'path'
+import { app, shell, BrowserWindow, ipcMain, Menu } from 'electron'
+const path = require('path');
+const fs = require('fs');
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
-    show: false,
-    autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: path.join(__dirname, '../preload/index.js'),
       sandbox: false
     }
   })
+
+  mainWindow.maximize();
+
+  let template = [
+    {
+      label: '文件',
+      submenu: [
+        {
+          label: '新建文件',
+          accelerator: 'Ctrl+N',
+          click: () => {
+            console.log('新建文件');
+          }
+        },
+        {
+          type: "separator",
+        },
+        {
+          label: '打开文件',
+          accelerator: 'Ctrl+O',
+          click: () => {
+            console.log('打开文件');
+          }
+        },
+        {
+          type: "separator",
+        },
+        {
+          label: '保存文件',
+          accelerator: 'Ctrl+S',
+          click: () => {
+            console.log('保存文件');
+          }
+        },
+      ]
+    },
+    {
+      label: '添加符号',
+      submenu: [
+        {
+          label: "符号编辑器",
+          click: () => {
+            if (symbolEditorWindow) {
+              symbolEditorWindow.focus();
+            } else {
+              createSymbolEditorWindow()
+            }
+          }
+        },
+        {
+          type: "separator",
+        },
+        {
+          label: "符号库",
+          click: () => {
+            mainWindow.webContents.send('routechange');
+          }
+        }
+      ]
+    },
+    {
+      label: '帮助',
+      submenu: [
+        {
+          label: '更多',
+          click: async () => {
+            await shell.openExternal('https://github.com/embraceyouting/cleanCAD');
+          }
+        }
+      ]
+    }
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  mainWindow.setMenu(menu);
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
@@ -26,13 +98,121 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+
+  ipcMain.on("getDrawFn", async (event, name) => {
+    try {
+      // 获取用户数据路径
+      const userDataPath = app.getPath('userData');
+      const drawFnPath = path.join(userDataPath, 'drawFn');
+      const fileName = `${name}.json`;
+      const fullPath = path.join(drawFnPath, fileName);
+  
+      // 确保目录存在
+      await fs.promises.mkdir(drawFnPath, { recursive: true });
+  
+      // 检查文件是否存在并读取文件内容
+      if (fs.existsSync(fullPath)) {
+        const fileContent = await fs.promises.readFile(fullPath, 'utf-8');
+        event.reply("getDrawFnResponse", { success: true, data: JSON.parse(fileContent) });
+      } else {
+        event.reply("getDrawFnResponse", { success: false, error: "File not found" });
+      }
+    } catch (error:any) {
+      // 发送错误信息
+      event.reply("getDrawFnResponse", { success: false, error: error.message });
+    }
+  });
+
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
   }
+}
+
+let symbolEditorWindow
+
+
+function createSymbolEditorWindow() {
+  symbolEditorWindow = new BrowserWindow({
+    width: 800,
+    height: 600,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      sandbox: false
+    }
+  });
+
+  let template = [
+    {
+      label: '文件',
+      submenu: [
+        {
+          label: '导入',
+          click: () => {
+            console.log('导入');
+          }
+        },
+        {
+          type: "separator",
+        },
+        {
+          label: '添加库',
+          click: () => {
+            console.log('添加库');
+          }
+        },
+        {
+          type: "separator",
+        },
+        {
+          label: '新建符号',
+          click: () => {
+            console.log('新建符号');
+          }
+        },
+        {
+          type: "separator",
+        },
+        {
+          label: '保存',
+          click: () => {
+            console.log('保存');
+          }
+        },
+      ]
+    },
+    {
+      label: '帮助',
+      submenu: [
+        {
+          label: '更多',
+          click: async () => {
+            await shell.openExternal('https://github.com/embraceyouting/cleanCAD');
+          }
+        }
+      ]
+    }
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  symbolEditorWindow.setMenu(menu);
+
+  // 加载路由路径 /symbol
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    symbolEditorWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#/symbol`);
+  } else {
+    symbolEditorWindow.loadFile(path.join(__dirname, '../renderer/index.html'), {
+      hash: 'symbol'
+    });
+  }
+
+  symbolEditorWindow.on('closed', () => {
+    symbolEditorWindow = null;
+  });
+
 }
 
 // This method will be called when Electron has finished

@@ -31,7 +31,17 @@ class Diagram {
   }
 
   removeComponent(component) {
-    if (this.#components.indexOf(component)) {
+    const pinsToUndefined = component.pins.map((pin) => {
+      return pin.connectedId
+    })
+    this.#components.forEach((component) => {
+      component.pins.forEach((pin) => {
+        if (pinsToUndefined.includes(pin.id)) {
+          pin.connectedId = undefined
+        }
+      })
+    })
+    if (this.#components.indexOf(component) !== -1) {
       this.#components.splice(this.#components.indexOf(component), 1)
     }
   }
@@ -147,12 +157,12 @@ class Rect implements RectType {
   type: "rect" = "rect";
 
   constructor(
-      centerX: number, centerY: number, width: number, height: number, 
-      tooltip: { offsetX: number; offsetY: number; content: string; show: boolean; }, 
-      pins: Array<{
-        id: number; from_offsetX: number; from_offsetY: number; to_offsetX: number; to_offsetY: number; connectedId?: number; 
-      }>
-    ) {
+    centerX: number, centerY: number, width: number, height: number,
+    tooltip: { offsetX: number; offsetY: number; content: string; show: boolean; },
+    pins: Array<{
+      id: number; from_offsetX: number; from_offsetY: number; to_offsetX: number; to_offsetY: number; connectedId?: number;
+    }>
+  ) {
     this.centerX = centerX;
     this.centerY = centerY;
     this.width = width;
@@ -168,7 +178,6 @@ class Rect implements RectType {
       };
       return newPin;
     });
-    
   }
 
   changePos(newX: number, newY: number) {

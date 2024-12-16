@@ -12,13 +12,14 @@
     <div class="symbol" v-if="route.fullPath == '/page/addSymbol'">
       <router-view></router-view>
     </div>
-   </div>
+  </div>
 </template>
   
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { Diagram , Rect } from '../class';
+import { Diagram, Rect } from '../class'
+import { useSymbolStore } from '../store'
 const route = useRoute()
 console.log(route)
 // 引用 Canvas 元素
@@ -41,7 +42,11 @@ let oneItem = false
 let currentGraph
 let ifSnapped
 let connectArr = []
-let diagramObject:Array<{}>
+let currentSymbol
+let originPoint = { x: 0, y: 0, radius: 4 }
+let isDragging = false
+let currentSnapPoint = null
+let diagramObject: Array<{}>
 // const rect  = new Rect(centerX, centerY, 40, 40, {offsetX:0,offsetY:-30,content:"nihao",show:true}, [{ id:undefined, from_offsetX: 20, from_offsetY: 0, to_offsetX: 40, to_offsetY: 0, connectedId: undefined }])
 
 // 画布尺寸更新
@@ -75,78 +80,85 @@ onMounted(() => {
       // 绑定鼠标事件
       const canvasElement = canvas.value
 
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' || e.key === 'Esc') {
+          if (currentGraph) {
+            diagram.removeComponent(currentGraph)
+            currentGraph = null
+          }
+          currentSymbol = null
+          isDragging = false
+          window.placeItemName = ''
+          oneItem = false
+          draw()
+        }
+        if (e.key === 'Backspace' || e.keyCode === 8) {
+          if (currentSymbol) {
+            diagram.removeComponent(currentSymbol)
+            draw()
+          }
+        }
+      })
+
       // 处理鼠标按下
       canvasElement.addEventListener('mousedown', (e) => {
         if (e.ctrlKey) {
           isPanning = true
+          isDragging = false
           startPan.x = e.offsetX
           startPan.y = e.offsetY
         } else {
           const mouseX = e.offsetX / scale - offsetX
           const mouseY = e.offsetY / scale - offsetY
-          const dist = Math.hypot(mouseX - dragPoint.x, mouseY - dragPoint.y)
-          if (dist < dragPoint.radius) {
+
+          currentSymbol = diagram.getComponent(mouseX, mouseY)
+          useSymbolStore().$state.currentSymbol = currentSymbol
+          if (currentSymbol) {
             isDragging = true
           }
 
-          if(ifSnapped){
-
-            if(connectArr.length == 2){
+          if (ifSnapped) {
+            if (connectArr.length == 2) {
               connectArr.shift()
-              connectArr.push(diagram.getPinId(snappedX,snappedY))
-              if(connectArr[0]&&connectArr[1]){
+              connectArr.push(diagram.getPinId(snappedX, snappedY))
+              if (connectArr[0] && connectArr[1]) {
                 ctx.save()
-    ctx.scale(scale, scale)
-    ctx.translate(offsetX, offsetY)
-                diagram.connectPin(connectArr[0],connectArr[1])
+                ctx.scale(scale, scale)
+                ctx.translate(offsetX, offsetY)
+                diagram.connectPin(connectArr[0], connectArr[1])
                 ctx.restore()
               }
-            }else{
-              if(connectArr.length == 1){
-                connectArr.push(diagram.getPinId(snappedX,snappedY))
-                if(connectArr[0]&&connectArr[1]){
+            } else {
+              if (connectArr.length == 1) {
+                connectArr.push(diagram.getPinId(snappedX, snappedY))
+                if (connectArr[0] && connectArr[1]) {
                   ctx.save()
-    ctx.scale(scale, scale)
-    ctx.translate(offsetX, offsetY)
-                  diagram.connectPin(connectArr[0],connectArr[1])
+                  ctx.scale(scale, scale)
+                  ctx.translate(offsetX, offsetY)
+                  diagram.connectPin(connectArr[0], connectArr[1])
                   ctx.restore()
                 }
-              }else{
-                connectArr.push(diagram.getPinId(snappedX,snappedY))
+              } else {
+                connectArr.push(diagram.getPinId(snappedX, snappedY))
               }
             }
 
-            console.log(connectArr)
-
-            if(window.placeItemName){
+            if (window.placeItemName) {
               oneItem = false
               console.log(currentGraph.id)
             }
           }
-          
-        }
-      })
-
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' || e.key === 'Esc'){
-          if(currentGraph){
-            diagram.removeComponent(currentGraph)
-            currentGraph = null
-          }
-          window.placeItemName = ""
-          oneItem = false
-          draw()
         }
       })
 
       // 处理鼠标移动
-      canvasElement.addEventListener('mousemove', async(e) => {
+      canvasElement.addEventListener('mousemove', async (e) => {
         const mouseX = e.offsetX / scale - offsetX
         const mouseY = e.offsetY / scale - offsetY
 
         mousepos.value = { x: mouseX.toFixed(2), y: mouseY.toFixed(2) }
 
-        console.log(mouseX, mouseY)
+        // console.log(mouseX, mouseY)
 
         if (isPanning) {
           const dx = (e.offsetX - startPan.x) / scale
@@ -160,23 +172,39 @@ onMounted(() => {
           // 动态吸附到网格交叉点
           currentSnapPoint = snapToGridWithThreshold(mouseX, mouseY)
 
-          if(window.placeItemName){
-            if(!oneItem){
-              const GraphName = window.placeItemName.charAt(0).toUpperCase() + window.placeItemName.slice(1);
-              const moduleExports = await import("../class/index");
-              const moduleExportsWithIndexSignature = moduleExports as { [key: string]: any };
-              const Graph = moduleExportsWithIndexSignature[GraphName];
-              currentGraph = new Graph(currentSnapPoint.x, currentSnapPoint.y,40, 40, {offsetX:0,offsetY:-30,content:"nihao",show:true}, [{ id:undefined, from_offsetX: 20, from_offsetY: 0, to_offsetX: 40, to_offsetY: 0, connectedId: undefined }])
+          if (window.placeItemName) {
+            if (!oneItem) {
+              const GraphName =
+                window.placeItemName.charAt(0).toUpperCase() + window.placeItemName.slice(1)
+              const moduleExports = await import('../class/index')
+              const moduleExportsWithIndexSignature = moduleExports as { [key: string]: any }
+              const Graph = moduleExportsWithIndexSignature[GraphName]
+              currentGraph = new Graph(
+                currentSnapPoint.x,
+                currentSnapPoint.y,
+                40,
+                40,
+                { offsetX: 0, offsetY: -30, content: 'nihao', show: true },
+                [
+                  {
+                    id: undefined,
+                    from_offsetX: 20,
+                    from_offsetY: 0,
+                    to_offsetX: 40,
+                    to_offsetY: 0,
+                    connectedId: undefined
+                  }
+                ]
+              )
               diagram.addComponent(currentGraph)
               oneItem = true
-            }else{
+            } else {
               currentGraph.changePos(currentSnapPoint.x, currentSnapPoint.y)
             }
           }
 
           if (isDragging) {
-            dragPoint.x = currentSnapPoint.x
-            dragPoint.y = currentSnapPoint.y
+            currentSymbol.changePos(mouseX, mouseY)
           }
 
           draw()
@@ -185,7 +213,13 @@ onMounted(() => {
       })
 
       // 处理鼠标松开
-      canvasElement.addEventListener('mouseup', () => {
+      canvasElement.addEventListener('mouseup', (e) => {
+        const mouseX = e.offsetX / scale - offsetX
+        const mouseY = e.offsetY / scale - offsetY
+        currentSnapPoint = snapToGrid(mouseX, mouseY)
+        if (isDragging) {
+          currentSymbol.changePos(currentSnapPoint.x, currentSnapPoint.y)
+        }
         isPanning = false
         isDragging = false
       })
@@ -287,12 +321,17 @@ function snapToGridWithThreshold(x: number, y: number, threshold = 0.2) {
   }
 }
 
-// 绘制可拖动的点
-let dragPoint = { x: 0, y: 0, radius: 4 }
-let isDragging = false
-let currentSnapPoint = null
+function snapToGrid(x: number, y: number, threshold = 0.2) {
+  // 计算吸附点的网格位置
+  const snappedGridX = Math.round(x / gridSize) * gridSize
+  const snappedGridY = Math.round(y / gridSize) * gridSize
+  return {
+    x: snappedGridX,
+    y: snappedGridY
+  }
+}
 
-function drawPoint() {
+function drawOriginPoint() {
   if (!ctx) return
 
   ctx.save()
@@ -300,7 +339,7 @@ function drawPoint() {
   ctx.translate(offsetX, offsetY)
   ctx.fillStyle = 'red'
   ctx.beginPath()
-  ctx.arc(dragPoint.x, dragPoint.y, dragPoint.radius, 0, Math.PI * 2)
+  ctx.arc(originPoint.x, originPoint.y, originPoint.radius, 0, Math.PI * 2)
   ctx.fill()
   ctx.restore()
 }
@@ -310,7 +349,7 @@ function drawSnapPoint(x: number, y: number, snapped?: boolean) {
   if (!x || !y || !ctx) return
 
   if (snapped) {
-    console.log('snap point', x, y) // 调试输出
+    // console.log('snap point', x, y) // 调试输出
   }
 
   ctx.save()
@@ -326,15 +365,15 @@ function drawSnapPoint(x: number, y: number, snapped?: boolean) {
 // 主绘制函数
 function draw() {
   if (!ctx) return
-  drawGrid();
-  drawPoint();
-  (()=>{
+  drawGrid()
+  drawOriginPoint()
+  ;(() => {
     ctx.save()
     ctx.scale(scale, scale)
     ctx.translate(offsetX, offsetY)
     diagram.render()
     ctx.restore()
-  })();
+  })()
 }
 </script>
   

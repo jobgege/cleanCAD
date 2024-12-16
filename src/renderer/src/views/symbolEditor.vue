@@ -54,7 +54,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Diagram , Rect } from '../class';
+import { Diagram, Rect } from '../class'
 // Canvas相关引用和上下文
 const canvas = ref(null)
 const canvasDiv = ref(null)
@@ -74,7 +74,23 @@ let dragPoint = { x: 0, y: 0, radius: 4 }
 let centerX
 let centerY
 let diagram
-const rect  = new Rect(centerX, centerY, 40, 40, {offsetX:0,offsetY:-30,content:"nihao",show:true}, [{ id:undefined, from_offsetX: 20, from_offsetY: 0, to_offsetX: 40, to_offsetY: 0, connectedId: undefined }])
+// const rect = new Rect(
+//   centerX,
+//   centerY,
+//   40,
+//   40,
+//   { offsetX: 0, offsetY: -30, content: 'nihao', show: true },
+//   [
+//     {
+//       id: undefined,
+//       from_offsetX: 20,
+//       from_offsetY: 0,
+//       to_offsetX: 40,
+//       to_offsetY: 0,
+//       connectedId: undefined
+//     }
+//   ]
+// )
 const currentSymbol = ref({} as { name: string; drawFn: Function })
 const mousepos = ref({} as { x: string; y: string })
 
@@ -86,9 +102,8 @@ onMounted(() => {
     resizeCanvas()
     // 绑定鼠标事件
     const canvasElement = canvas.value
-    
 
-    diagram.addComponent(rect)
+    // diagram.addComponent(rect)
     diagram.render()
 
     // 处理鼠标按下
@@ -134,7 +149,6 @@ onMounted(() => {
         draw()
         drawSnapPoint(currentSnapPoint.x, currentSnapPoint.y, currentSnapPoint.snapped)
       }
-
     })
 
     // 处理鼠标松开
@@ -180,7 +194,7 @@ const resizeCanvas = () => {
   canvas.value.height = canvasDiv.value.clientHeight
   centerX = Math.floor(canvas.value.width / (2 * gridSize)) * gridSize
   centerY = Math.floor(canvas.value.height / (2 * gridSize)) * gridSize
-  rect.changePos(centerX, centerY)
+  // rect.changePos(centerX, centerY)
   draw()
 }
 
@@ -283,17 +297,17 @@ function drawPoint() {
 
 // 主绘制函数
 function draw() {
-  if (!ctx) return;
-  drawGrid();
-  drawPoint();
-  drawSymbol();
-  (()=>{
+  if (!ctx) return
+  drawGrid()
+  drawPoint()
+  drawSymbol()
+  ;(() => {
     ctx.save()
     ctx.scale(scale, scale)
     ctx.translate(offsetX, offsetY)
     diagram.render()
     ctx.restore()
-  })();
+  })()
 }
 
 // 符号绘制

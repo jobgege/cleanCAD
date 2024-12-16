@@ -19,10 +19,10 @@ interface RectType {
         connectedId?: number; // 使用 connectedId 来表示连接的引脚ID，如果没有连接则为undefined
     }>;
     type: "rect";
-    draw:Function
+    draw: Function
 }
 
-interface TriangleType{
+interface TriangleType {
     id: number;
     centerX: number;
     centerY: number;
@@ -43,11 +43,11 @@ interface TriangleType{
         connectedId?: number; // 使用 connectedId 来表示连接的引脚ID，如果没有连接则为undefined
     }>;
     type: "triangle";
-    draw:Function
+    draw: Function
 }
 
 
-export type{ 
+export type {
     RectType,
     TriangleType
- }
+}

@@ -1,6 +1,6 @@
-# electron-app
+# cleanCad
 
-An Electron application with Vue and TypeScript
+An Electron Web Cad with canvas
 
 ## Recommended IDE Setup
 

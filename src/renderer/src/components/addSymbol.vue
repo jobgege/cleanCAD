@@ -50,7 +50,7 @@
           >
             <span>{{ key }}</span>
             <span>:</span>
-            <input v-model="symbolInfos[key]" />
+            <input v-model="symbolInfos[key]"/>
           </div>
           <div class="tooltip">
             <span>{{ 'tooltip' }}</span>
@@ -80,18 +80,10 @@ const router = useRouter()
 const canvas = ref()
 const canvasDiv = ref()
 let ctx: CanvasRenderingContext2D | null = null
-let symbolInfos = ref({
-  width: 40,
-  height: 40,
-  toolTip: {
-    offsetX: 0,
-    offsetY: 0,
-    content: 'nihao',
-    show: true
-  }
-})
 
-onMounted(() => {
+onMounted(async() => {
+  const menuData = await window.api.getSymbolLibrary()
+  menu.value = JSON.parse(menuData)
   if (canvas.value) {
     ctx = canvas.value.getContext('2d')
     canvas.value.width = canvasDiv.value.clientWidth
@@ -102,9 +94,27 @@ onMounted(() => {
 watch(
   () => useSymbolStore().$state.currentSymbol,
   (newval, oldval) => {
-    console.log(newval)
+    console.log(
+      useSymbolStore().$state.currentSymbol
+    )
   }
 )
+
+let symbolInfos = computed(()=>{
+  if(useSymbolStore().$state.currentSymbol){
+    return {
+      width:useSymbolStore().$state.currentSymbol.width,
+      height: useSymbolStore().$state.currentSymbol.height,
+      toolTip: useSymbolStore().$state.currentSymbol.toolTip
+    }
+  }else{
+    return {
+      width:undefined,
+      height: undefined,
+      toolTip: undefined
+    }
+  }
+})
 
 // 初始化菜单数据
 const menu = ref([
@@ -190,13 +200,10 @@ const dbtoggleItem = (name: string) => {
 }
 
 const draw = async (name: string) => {
-  const fnString = await window.api.getDrawFn(name)
-  const drawFn = new Function(fnString)
   console.log(canvas.value.width, canvas.value.height)
   ctx.clearRect(0, 0, canvas.value.width, canvas.value.height)
   ctx.beginPath()
   ctx.closePath()
-  drawFn(canvas.value.width / 2, canvas.value.height / 2, ctx)
 }
 
 window.addEventListener('resize', () => {
@@ -251,6 +258,7 @@ main {
         outline: none;
       }
     }
+    
   }
 
   .rightPart {

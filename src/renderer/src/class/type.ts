@@ -1,17 +1,17 @@
 interface RectType {
-    id: number;
+    id: number|undefined;
     centerX: number;
     centerY: number;
     width: number;
     height: number;
-    tooltip: {
+    toolTip: {
         offsetX: number;
         offsetY: number;
         content: string;
         show: boolean;
     };
     pins: Array<{
-        id: number;
+        id: number|undefined;
         from_offsetX: number;
         from_offsetY: number;
         to_offsetX: number;
@@ -22,20 +22,36 @@ interface RectType {
     draw: Function
 }
 
+
+interface LineType {
+    from_X: number;
+    from_Y: number;
+    to_X: number;
+    to_Y: number
+    toolTip: {
+        offsetX: number;
+        offsetY: number;
+        content: string;
+        show: boolean;
+    };
+    type: "line";
+    draw: Function
+}
+
 interface TriangleType {
-    id: number;
+    id: number|undefined;
     centerX: number;
     centerY: number;
     width: number;
     height: number;
-    tooltip: {
+    toolTip: {
         offsetX: number;
         offsetY: number;
         content: string;
         show: boolean;
     };
     pins: Array<{
-        id: number;
+        id: number|undefined;
         from_offsetX: number;
         from_offsetY: number;
         to_offsetX: number;
@@ -49,5 +65,6 @@ interface TriangleType {
 
 export type {
     RectType,
-    TriangleType
+    TriangleType,
+    LineType
 }

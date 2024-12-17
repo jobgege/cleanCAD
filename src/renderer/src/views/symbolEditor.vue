@@ -33,8 +33,11 @@
     </div>
     <div class="rightPart">
       <div class="nav">
-        <svg class="iconNav" aria-hidden="true" @click="addPin">
+        <svg class="iconNav" ref="addPinIcon" aria-hidden="true">
           <use xlink:href="#icon-pin"></use>
+        </svg>
+        <svg class="iconNav" ref="addLine" name="Line" aria-hidden="true">
+          <use xlink:href="#icon-xianduan"></use>
         </svg>
       </div>
       <div class="canvasDiv" ref="canvasDiv">
@@ -58,6 +61,8 @@ import { Diagram, Rect } from '../class'
 // Canvas相关引用和上下文
 const canvas = ref(null)
 const canvasDiv = ref(null)
+const addPinIcon = ref()
+const addLine = ref()
 let ctx: CanvasRenderingContext2D | null = null
 
 // Canvas状态变量
@@ -74,6 +79,18 @@ let dragPoint = { x: 0, y: 0, radius: 4 }
 let centerX
 let centerY
 let diagram
+let currentGraph
+let addPinArray = []
+let addLineArray = []
+let isAddPin = false
+let isAddLine = false
+let isFindToPos = false
+let snapped
+let snappedGridX
+let snappedGridY
+let snappedX
+let snappedY
+
 // const rect = new Rect(
 //   centerX,
 //   centerY,
@@ -95,7 +112,7 @@ const currentSymbol = ref({} as { name: string; drawFn: Function })
 const mousepos = ref({} as { x: string; y: string })
 
 // 初始化画布和上下文
-onMounted(() => {
+onMounted(async() => {
   if (canvas.value) {
     ctx = canvas.value.getContext('2d')
     diagram = new Diagram(ctx)
@@ -103,11 +120,39 @@ onMounted(() => {
     // 绑定鼠标事件
     const canvasElement = canvas.value
 
+    const menuData = await window.api.getSymbolLibrary()
+    menu.value = JSON.parse(menuData)
+
     // diagram.addComponent(rect)
     diagram.render()
 
+    addPinIcon.value.addEventListener("click", ()=>{
+      isAddPin = true
+      isAddLine = false
+      addLineArray = []
+    })
+
+    addLine.value.addEventListener("click", ()=>{
+      isAddLine = true
+      isAddPin = false
+      addPinArray = []
+    });
+
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' || e.key === 'Esc') {
+          isAddPin = false
+          isAddLine = false
+          addPinArray = []
+          addLineArray = []
+          if(currentGraph){
+            diagram.removeComponent(currentGraph)
+          }
+          draw()
+        }
+    })
+
     // 处理鼠标按下
-    canvasElement.addEventListener('mousedown', (e) => {
+    canvasElement.addEventListener('mousedown', async(e) => {
       if (e.ctrlKey) {
         isPanning = true
         startPan.x = e.offsetX
@@ -115,9 +160,40 @@ onMounted(() => {
       } else {
         const mouseX = e.offsetX / scale - offsetX
         const mouseY = e.offsetY / scale - offsetY
-        const dist = Math.hypot(mouseX - dragPoint.x, mouseY - dragPoint.y)
-        if (dist < dragPoint.radius) {
-          isDragging = true
+        if(snapped&&isAddPin){
+          addPinArray.push({x:snappedX-centerX,y:snappedY-centerY})
+          if(addPinArray.length == 2){
+            currentGraph.addPin(addPinArray[0].x,addPinArray[0].y,addPinArray[1].x,addPinArray[1].y)
+            isAddPin = false
+            addPinArray = []
+          }
+        }
+
+        if(snapped&&isAddLine){
+          if(addLineArray.length == 0){
+            addLineArray.push({x:snappedX,y:snappedY})
+            const GraphName = addLine.value.getAttribute('name')
+            const moduleExports = await import('../class/index')
+            const moduleExportsWithIndexSignature = moduleExports as { [key: string]: any }
+            const Graph = moduleExportsWithIndexSignature[GraphName]
+            currentGraph = new Graph(
+              addLineArray[0].x,
+              addLineArray[0].y,
+              mouseX,
+              mouseY,
+              { offsetX: 0, offsetY: -10, content: '', show: false },
+            )
+            diagram.addComponent(currentGraph)
+            draw()
+            isFindToPos = true
+          }
+          else if(addLineArray.length==1&&(addLineArray[0].x!=snappedX||addLineArray[0].y!=snappedY)){
+            addLineArray.push({x:snappedX,y:snappedY})
+            currentGraph.preview(addLineArray[1].x, addLineArray[1].y)
+            addLineArray = []
+            isFindToPos = false
+            currentGraph = null
+          }
         }
       }
     })
@@ -141,9 +217,8 @@ onMounted(() => {
         // 动态吸附到网格交叉点
         currentSnapPoint = snapToGridWithThreshold(mouseX, mouseY)
 
-        if (isDragging) {
-          dragPoint.x = currentSnapPoint.x
-          dragPoint.y = currentSnapPoint.y
+        if(isAddLine&&isFindToPos){
+          currentGraph.preview(mouseX, mouseY)
         }
 
         draw()
@@ -194,7 +269,9 @@ const resizeCanvas = () => {
   canvas.value.height = canvasDiv.value.clientHeight
   centerX = Math.floor(canvas.value.width / (2 * gridSize)) * gridSize
   centerY = Math.floor(canvas.value.height / (2 * gridSize)) * gridSize
-  // rect.changePos(centerX, centerY)
+  if(currentGraph){
+    currentGraph.changePos(centerX, centerY)
+  }
   draw()
 }
 
@@ -235,31 +312,36 @@ function drawGrid() {
 // 吸附到网格
 function snapToGridWithThreshold(x: number, y: number, threshold = 0.2) {
   // 计算吸附点的网格位置
-  const snappedX = Math.round(x / gridSize) * gridSize
-  const snappedY = Math.round(y / gridSize) * gridSize
+  snappedGridX = Math.round(x / gridSize) * gridSize
+  snappedGridY = Math.round(y / gridSize) * gridSize
 
   // 计算鼠标到吸附点的距离
-  const distanceX = Math.abs(x - snappedX)
-  const distanceY = Math.abs(y - snappedY)
+  const distanceX = Math.abs(x - snappedGridX)
+  const distanceY = Math.abs(y - snappedGridY)
 
   // 只有当距离小于阈值时，才认为吸附到了网格交点
   if (distanceX <= gridSize * threshold && distanceY <= gridSize * threshold) {
+    snappedX = snappedGridX
+    snappedY = snappedGridY
     mousepos.value = { x: snappedX.toFixed(2), y: snappedY.toFixed(2) }
+    snapped = true
     return { x: snappedX, y: snappedY, snapped: true }
   }
 
+  snapped = false
+
   if (distanceX <= gridSize * threshold) {
-    mousepos.value.x = snappedX.toFixed(2)
+    mousepos.value.x = snappedGridX.toFixed(2)
   }
 
   if (distanceY <= gridSize * threshold) {
-    mousepos.value.y = snappedY.toFixed(2)
+    mousepos.value.y = snappedGridY.toFixed(2)
   }
 
   // 如果没有吸附到交叉点，返回原始位置或者吸附边界
   return {
-    x: distanceX <= gridSize * threshold ? snappedX : x,
-    y: distanceY <= gridSize * threshold ? snappedY : y,
+    x: distanceX <= gridSize * threshold ? snappedGridX : x,
+    y: distanceY <= gridSize * threshold ? snappedGridY : y,
     snapped: false
   }
 }
@@ -270,7 +352,7 @@ function drawSnapPoint(x: number, y: number, snapped?: boolean) {
   if (!ctx) return
 
   if (snapped) {
-    console.log('snap point', x, y) // 调试输出
+    // console.log('snap point', x, y) // 调试输出
   }
 
   ctx.save()
@@ -298,26 +380,15 @@ function drawPoint() {
 // 主绘制函数
 function draw() {
   if (!ctx) return
-  drawGrid()
-  drawPoint()
-  drawSymbol()
-  ;(() => {
+  drawGrid();
+  drawPoint();
+  (() => {
     ctx.save()
     ctx.scale(scale, scale)
     ctx.translate(offsetX, offsetY)
     diagram.render()
     ctx.restore()
   })()
-}
-
-// 符号绘制
-const drawSymbol = () => {
-  if (!currentSymbol.value.drawFn) return
-  ctx.save()
-  ctx.scale(scale, scale)
-  ctx.translate(offsetX, offsetY)
-  currentSymbol.value.drawFn(centerX, centerY, ctx)
-  ctx.restore()
 }
 
 // 符号库和选择逻辑
@@ -328,6 +399,7 @@ const menu = ref([
     children: [{ label: 'rect' }, { label: 'triangle' }]
   }
 ])
+
 
 const searchQuery = ref('')
 const chooseItem = ref('')
@@ -355,9 +427,36 @@ const toggleItem = (item, label) => {
 }
 
 const dbtoggleItem = async (label) => {
+
+  if(searchQuery.value){
+    searchQuery.value = ''
+  }
+  if(currentGraph){
+    diagram.removeComponent(currentGraph)
+  }
   chooseItem.value = label
-  const fnString = await window.api.getDrawFn(label)
-  currentSymbol.value = { name: label, drawFn: new Function('x', 'y', 'ctx', fnString) }
+  const GraphName = chooseItem.value.charAt(0).toUpperCase() + chooseItem.value.slice(1)
+  const moduleExports = await import('../class/index')
+  const moduleExportsWithIndexSignature = moduleExports as { [key: string]: any }
+  const Graph = moduleExportsWithIndexSignature[GraphName]
+  currentGraph = new Graph(
+    centerX,
+    centerY,
+    40,
+    40,
+    { offsetX: 0, offsetY: -30, content: 'nihao', show: true },
+    [
+      {
+        id: undefined,
+        from_offsetX: 20,
+        from_offsetY: 0,
+        to_offsetX: 40,
+        to_offsetY: 0,
+        connectedId: undefined
+      }
+    ]
+  )
+  diagram.addComponent(currentGraph)
   draw()
 }
 
@@ -373,7 +472,6 @@ function goToPoint() {
   draw()
 }
 
-function addPin() {}
 </script>
 
 <style lang="scss" scoped>

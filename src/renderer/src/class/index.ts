@@ -1,4 +1,4 @@
-import { RectType, TriangleType } from "./type";
+import { RectType, TriangleType, LineType } from "./type";
 
 class Diagram {
   #components
@@ -19,10 +19,12 @@ class Diagram {
     this.#components.push(component);
     component.id = this.#componentId
     this.#componentId++
-    component.pins.forEach((pin) => {
-      pin.id = this.#pinId
-      this.#pinId++
-    })
+    if(component&&component.pins){
+      component.pins.forEach((pin) => {
+        pin.id = this.#pinId
+        this.#pinId++
+      })
+    }
   }
 
   changeSize(newX, newY) {
@@ -31,16 +33,21 @@ class Diagram {
   }
 
   removeComponent(component) {
-    const pinsToUndefined = component.pins.map((pin) => {
-      return pin.connectedId
-    })
-    this.#components.forEach((component) => {
-      component.pins.forEach((pin) => {
-        if (pinsToUndefined.includes(pin.id)) {
-          pin.connectedId = undefined
+    if (component&&component.pins) {
+      const pinsToUndefined = component.pins.map((pin) => {
+        return pin.connectedId
+      })
+      this.#components.forEach((component) => {
+        if (component&&component.pins) {
+          component.pins.forEach((pin) => {
+            if (pinsToUndefined.includes(pin.id)) {
+              pin.connectedId = undefined
+            }
+          })
         }
       })
-    })
+    }
+
     if (this.#components.indexOf(component) !== -1) {
       this.#components.splice(this.#components.indexOf(component), 1)
     }
@@ -113,37 +120,91 @@ class Diagram {
     });
 
     this.#components.forEach(component => {
-      component.pins.forEach(pin => {
-        if (pin.connectedId !== undefined) {
-          const connectedPin = this.getPinById(pin.connectedId);
-          if (connectedPin) {
-            this.#ctx.beginPath();
-            this.#ctx.moveTo(pin.position.x, pin.position.y);
-            this.#ctx.lineTo(connectedPin.position.x, connectedPin.position.y);
-            this.#ctx.stroke();
+      if(component&&component.pins){
+        component.pins.forEach(pin => {
+          if (pin.connectedId !== undefined) {
+            const connectedPin = this.getPinById(pin.connectedId);
+            if (connectedPin) {
+              this.#ctx.beginPath();
+              this.#ctx.moveTo(pin.position.x, pin.position.y);
+              this.#ctx.lineTo(connectedPin.position.x, connectedPin.position.y);
+              this.#ctx.stroke();
+            }
           }
-        }
-      });
+        });
+      }
     });
+  }
+}
 
+
+class Line implements LineType {
+  from_X: number;
+  from_Y: number;
+  to_X: number;
+  to_Y: number;
+  toolTip: {
+    offsetX: number;
+    offsetY: number;
+    content: string;
+    show: boolean;
+  };
+  type: "line" = "line";
+  constructor(
+    from_X: number, 
+    from_Y: number, 
+    to_X: number, 
+    to_Y: number, 
+    toolTip: {
+      offsetX: number;
+      offsetY: number;
+      content: string;
+      show: boolean;
+    }
+  ){
+    this.from_X = from_X
+    this.from_Y = from_Y
+    this.to_X = to_X
+    this.to_Y = to_Y
+    this.toolTip = toolTip
+  }
+
+  preview(mouseX: number, mouseY: number){
+    this.to_X = mouseX
+    this.to_Y = mouseY
+  }
+
+  draw(ctx: CanvasRenderingContext2D) {
+    ctx.beginPath();
+    ctx.moveTo(this.from_X,this.from_Y)
+    ctx.lineTo(this.to_X,this.to_Y)
+    ctx.stroke();
+
+    if (this.toolTip.show && this.toolTip.content) {
+      ctx.font = '10px Arial';
+      ctx.fillStyle = 'black';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(this.toolTip.content, (this.from_X+this.to_X)/2 + this.toolTip.offsetX, (this.from_Y+this.to_Y)/2 + this.toolTip.offsetY);
+    }
   }
 
 }
 
 class Rect implements RectType {
-  id: number;
+  id: number | undefined;
   centerX: number;
   centerY: number;
   width: number;
   height: number;
-  tooltip: {
+  toolTip: {
     offsetX: number;
     offsetY: number;
     content: string;
     show: boolean;
   };
   pins: Array<{
-    id: number;
+    id: number | undefined;
     from_offsetX: number;
     from_offsetY: number;
     to_offsetX: number;
@@ -158,16 +219,16 @@ class Rect implements RectType {
 
   constructor(
     centerX: number, centerY: number, width: number, height: number,
-    tooltip: { offsetX: number; offsetY: number; content: string; show: boolean; },
+    toolTip: { offsetX: number; offsetY: number; content: string; show: boolean; },
     pins: Array<{
-      id: number; from_offsetX: number; from_offsetY: number; to_offsetX: number; to_offsetY: number; connectedId?: number;
+      id: number | undefined; from_offsetX: number; from_offsetY: number; to_offsetX: number; to_offsetY: number; connectedId?: number;
     }>
   ) {
     this.centerX = centerX;
     this.centerY = centerY;
     this.width = width;
     this.height = height;
-    this.tooltip = tooltip;
+    this.toolTip = toolTip;
     this.pins = pins.map(pin => {
       const newPin = {
         ...pin,
@@ -178,6 +239,21 @@ class Rect implements RectType {
       };
       return newPin;
     });
+  }
+
+  addPin(from_offsetX, from_offsetY, to_offsetX, to_offsetY) {
+    this.pins.push({
+      id: undefined,
+      from_offsetX,
+      from_offsetY,
+      to_offsetX,
+      to_offsetY,
+      connectedId: undefined,
+      position: {
+        x: to_offsetX,
+        y: to_offsetY
+      }
+    })
   }
 
   changePos(newX: number, newY: number) {
@@ -196,39 +272,52 @@ class Rect implements RectType {
     // 绘制引脚
     this.pins.forEach(pin => {
       ctx.beginPath();
+      let bitX = 0
+      let bitY = 0
+      if (pin.to_offsetX - pin.from_offsetX > 0) {
+        bitX = -2
+      } else if (pin.to_offsetX - pin.from_offsetX < 0) {
+        bitX = 2
+      } else {
+        if (pin.to_offsetY - pin.from_offsetY > 0) {
+          bitY = -2
+        } else {
+          bitY = 2
+        }
+      }
       ctx.moveTo(this.centerX + pin.from_offsetX, this.centerY + pin.from_offsetY);
-      ctx.lineTo(this.centerX + pin.to_offsetX - 2, this.centerY + pin.to_offsetY);
+      ctx.lineTo(this.centerX + pin.to_offsetX + bitX, this.centerY + pin.to_offsetY + bitY);
       ctx.stroke();
       ctx.beginPath()
       ctx.arc(this.centerX + pin.to_offsetX, this.centerY + pin.to_offsetY, 2, 0, Math.PI * 2)
       ctx.stroke();
     });
     //绘制tooltip
-    if (this.tooltip.show && this.tooltip.content) {
+    if (this.toolTip.show && this.toolTip.content) {
       ctx.font = '10px Arial';
       ctx.fillStyle = 'black';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(this.tooltip.content, this.centerX + this.tooltip.offsetX, this.centerY + this.tooltip.offsetY);
+      ctx.fillText(this.toolTip.content, this.centerX + this.toolTip.offsetX, this.centerY + this.toolTip.offsetY);
     }
   }
 }
 
 
 class Triangle implements TriangleType {
-  id: number;
+  id: number | undefined;
   centerX: number;
   centerY: number;
   width: number;
   height: number;
-  tooltip: {
+  toolTip: {
     offsetX: number;
     offsetY: number;
     content: string;
     show: boolean;
   };
   pins: Array<{
-    id: number;
+    id: number | undefined;
     from_offsetX: number;
     from_offsetY: number;
     to_offsetX: number;
@@ -241,12 +330,12 @@ class Triangle implements TriangleType {
   }>;
   type: "triangle" = "triangle";
 
-  constructor(centerX: number, centerY: number, width: number, height: number, tooltip: { offsetX: number; offsetY: number; content: string; show: boolean; }, pins: Array<{ id: number; from_offsetX: number; from_offsetY: number; to_offsetX: number; to_offsetY: number; connectedId?: number; }>) {
+  constructor(centerX: number, centerY: number, width: number, height: number, toolTip: { offsetX: number; offsetY: number; content: string; show: boolean; }, pins: Array<{ id: number | undefined; from_offsetX: number; from_offsetY: number; to_offsetX: number; to_offsetY: number; connectedId?: number; }>) {
     this.centerX = centerX;
     this.centerY = centerY;
     this.width = width;
     this.height = height;
-    this.tooltip = tooltip;
+    this.toolTip = toolTip;
     this.pins = pins.map(pin => {
       const newPin = {
         ...pin,
@@ -257,6 +346,21 @@ class Triangle implements TriangleType {
       };
       return newPin;
     });
+  }
+
+  addPin(from_offsetX, from_offsetY, to_offsetX, to_offsetY) {
+    this.pins.push({
+      id: undefined,
+      from_offsetX,
+      from_offsetY,
+      to_offsetX,
+      to_offsetY,
+      connectedId: undefined,
+      position: {
+        x: to_offsetX,
+        y: to_offsetY
+      }
+    })
   }
 
   changePos(newX: number, newY: number) {
@@ -279,20 +383,33 @@ class Triangle implements TriangleType {
     // 绘制引脚
     this.pins.forEach(pin => {
       ctx.beginPath();
+      let bitX = 0
+      let bitY = 0
+      if (pin.to_offsetX - pin.from_offsetX > 0) {
+        bitX = -2
+      } else if (pin.to_offsetX - pin.from_offsetX < 0) {
+        bitX = 2
+      } else {
+        if (pin.to_offsetY - pin.from_offsetY > 0) {
+          bitY = -2
+        } else {
+          bitY = 2
+        }
+      }
       ctx.moveTo(this.centerX + pin.from_offsetX, this.centerY + pin.from_offsetY);
-      ctx.lineTo(this.centerX + pin.to_offsetX - 2, this.centerY + pin.to_offsetY);
+      ctx.lineTo(this.centerX + pin.to_offsetX + bitX, this.centerY + pin.to_offsetY + bitY);
       ctx.stroke();
       ctx.beginPath()
       ctx.arc(this.centerX + pin.to_offsetX, this.centerY + pin.to_offsetY, 2, 0, Math.PI * 2)
       ctx.stroke();
     });
     //绘制tooltip
-    if (this.tooltip.show && this.tooltip.content) {
+    if (this.toolTip.show && this.toolTip.content) {
       ctx.font = '10px Arial';
       ctx.fillStyle = 'black';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(this.tooltip.content, this.centerX + this.tooltip.offsetX, this.centerY + this.tooltip.offsetY);
+      ctx.fillText(this.toolTip.content, this.centerX + this.toolTip.offsetX, this.centerY + this.toolTip.offsetY);
     }
   }
 }
@@ -300,5 +417,6 @@ class Triangle implements TriangleType {
 export {
   Diagram,
   Rect,
-  Triangle
+  Triangle,
+  Line
 };

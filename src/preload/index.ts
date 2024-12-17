@@ -7,12 +7,24 @@ const api = {
   routechange: (callbak) => ipcRenderer.on("routechange",()=>{
     callbak()
   }),
-  getDrawFn: (name) => {
+  // getDrawFn: (name) => {
+  //   return new Promise((resolve,reject)=>{
+  //     ipcRenderer.send("getDrawFn",name)
+  //     ipcRenderer.once("getDrawFnResponse", (event, data) => {
+  //       if(data.success){
+  //         resolve(data.data)
+  //       }else{
+  //         reject(data.error)
+  //       }
+  //     })
+  //   })
+  // },
+  getSymbolLibrary:()=>{
     return new Promise((resolve,reject)=>{
-      ipcRenderer.send("getDrawFn",name)
-      ipcRenderer.once("getDrawFnResponse", (event, data) => {
+      ipcRenderer.send("getSymbolLibrary")
+      ipcRenderer.once("getSymbolLibraryResponse", (event, data) => {
         if(data.success){
-          resolve(data.data.method)
+          resolve(data.data)
         }else{
           reject(data.error)
         }

@@ -365,9 +365,9 @@ function drawSnapPoint(x: number, y: number, snapped?: boolean) {
 // 主绘制函数
 function draw() {
   if (!ctx) return
-  drawGrid()
-  drawOriginPoint()
-  ;(() => {
+  drawGrid();
+  drawOriginPoint();
+  (() => {
     ctx.save()
     ctx.scale(scale, scale)
     ctx.translate(offsetX, offsetY)

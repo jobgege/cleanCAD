@@ -99,27 +99,79 @@ function createWindow(): void {
   })
 
 
-  ipcMain.on("getDrawFn", async (event, name) => {
+  // ipcMain.on("getDrawFn", async (event, name) => {
+  //   try {
+  //     // 获取用户数据路径
+  //     const userDataPath = app.getPath('userData');
+  //     const drawFnPath = path.join(userDataPath, 'drawFn');
+  //     const fileName = `${name}.json`;
+  //     const fullPath = path.join(drawFnPath, fileName);
+  
+  //     // 确保目录存在
+  //     await fs.promises.mkdir(drawFnPath, { recursive: true });
+  
+  //     // 检查文件是否存在并读取文件内容
+  //     if (fs.existsSync(fullPath)) {
+  //       const fileContent = await fs.promises.readFile(fullPath, 'utf-8');
+  //       event.reply("getDrawFnResponse", { success: true, data: JSON.parse(fileContent) });
+  //     } else {
+  //       event.reply("getDrawFnResponse", { success: false, error: "File not found" });
+  //     }
+  //   } catch (error:any) {
+  //     // 发送错误信息
+  //     event.reply("getDrawFnResponse", { success: false, error: error.message });
+  //   }
+  // });
+
+
+  ipcMain.on("getSymbolLibrary", async (event) => {
     try {
-      // 获取用户数据路径
       const userDataPath = app.getPath('userData');
-      const drawFnPath = path.join(userDataPath, 'drawFn');
-      const fileName = `${name}.json`;
-      const fullPath = path.join(drawFnPath, fileName);
+      const SymbolLibraryPath = path.join(userDataPath, 'SymbolLibrary');
   
-      // 确保目录存在
-      await fs.promises.mkdir(drawFnPath, { recursive: true });
+      await fs.promises.mkdir(SymbolLibraryPath, { recursive: true });
   
-      // 检查文件是否存在并读取文件内容
-      if (fs.existsSync(fullPath)) {
-        const fileContent = await fs.promises.readFile(fullPath, 'utf-8');
-        event.reply("getDrawFnResponse", { success: true, data: JSON.parse(fileContent) });
-      } else {
-        event.reply("getDrawFnResponse", { success: false, error: "File not found" });
-      }
+      const buildDirectoryStructure = async (dirPath) => {
+        const filesAndDirs = await fs.promises.readdir(dirPath, { withFileTypes: true });
+        const children:any = [];
+        
+        for (const entry of filesAndDirs) {
+          const entryPath = path.join(dirPath, entry.name);
+          if (entry.isDirectory()) {
+            const subChildren = await buildDirectoryStructure(entryPath);
+            children.push({
+              label: entry.name,
+              isOpen: false,
+              children: subChildren
+            });
+          } else if (entry.isFile() && path.extname(entry.name) === '.json') {
+            children.push({ label: path.basename(entry.name, '.json') });
+          }
+        }
+        return children;
+      };
+  
+      // 先获取所有的目录
+      const dirs = await fs.promises.readdir(SymbolLibraryPath, { withFileTypes: true })
+        .then(filesAndDirs => filesAndDirs.filter(dirent => dirent.isDirectory())
+          .map(dirent => dirent.name));
+  
+      // 然后为每个目录构建children
+      const libraries = await Promise.all(dirs.map(async (dirName) => {
+        const dirPath = path.join(SymbolLibraryPath, dirName);
+        const children = await buildDirectoryStructure(dirPath);
+        return {
+          label: `${dirName}`,
+          isOpen: false,
+          children
+        };
+      }));
+  
+      console.log(libraries);
+      event.reply("getSymbolLibraryResponse", { success: true, data: JSON.stringify(libraries) });
     } catch (error:any) {
-      // 发送错误信息
-      event.reply("getDrawFnResponse", { success: false, error: error.message });
+      console.log(error);
+      event.reply("getSymbolLibraryResponse", { success: false, error: error.message });
     }
   });
 

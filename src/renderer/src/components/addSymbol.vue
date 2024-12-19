@@ -23,7 +23,7 @@
             v-for="child in item.children"
             :key="child.label"
             @click="toggleItem(item, child.label)"
-            @dblclick="dbtoggleItem(child.label)"
+            @dblclick="dbtoggleItem(item.label,child.label)"
             :style="child.label === chooseItem ? 'background-color: #dee2e6;' : ''"
           >
             <span>{{ child.label }}</span>
@@ -40,7 +40,7 @@
           <div class="type">
             <span>{{ 'type' }}</span>
             <span>:</span>
-            <span>{{ 'rect' }}</span>
+            <span>{{ useSymbolStore().$state.currentComponent&&useSymbolStore().$state.currentComponent.type }}</span>
           </div>
           <div
             class="info"
@@ -72,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch ,defineEmits } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSymbolStore } from '../store'
 import axios from 'axios'
@@ -92,25 +92,25 @@ onMounted(async() => {
 })
 
 watch(
-  () => useSymbolStore().$state.currentSymbol,
+  () => useSymbolStore().$state.currentComponent,
   (newval, oldval) => {
     console.log(
-      useSymbolStore().$state.currentSymbol
+      useSymbolStore().$state.currentComponent
     )
   }
 )
 
 let symbolInfos = computed(()=>{
-  if(useSymbolStore().$state.currentSymbol){
+  if(useSymbolStore().$state.currentComponent){
     return {
-      width:useSymbolStore().$state.currentSymbol.width,
-      height: useSymbolStore().$state.currentSymbol.height,
-      toolTip: useSymbolStore().$state.currentSymbol.toolTip
+      centerX:useSymbolStore().$state.currentComponent.centerX,
+      centerY: useSymbolStore().$state.currentComponent.centerY,
+      toolTip: useSymbolStore().$state.currentComponent.toolTip
     }
   }else{
     return {
-      width:undefined,
-      height: undefined,
+      centerX:undefined,
+      centerY: undefined,
       toolTip: undefined
     }
   }
@@ -169,6 +169,7 @@ const filteredMenu = computed(() => {
     .filter(Boolean) // 过滤掉未返回的项
 })
 
+
 // 切换菜单展开和收起
 const toggleMenu = (index: number) => {
   // 关闭其他菜单
@@ -190,13 +191,14 @@ const toggleItem = (item, name: string) => {
   draw(chooseItem.value)
 }
 
-const dbtoggleItem = (name: string) => {
+const emit = defineEmits(["placeItem"])
+
+const dbtoggleItem = (libraryName:string,symbolName: string) => {
   if (searchQuery.value) {
     searchQuery.value = ''
-  } else {
-    window.placeItemName = name
-    console.log(window.placeItemName)
-  }
+  } 
+  window.placeItemName = {libraryName:libraryName,symbolName:symbolName}
+  emit("placeItem",libraryName,symbolName)
 }
 
 const draw = async (name: string) => {

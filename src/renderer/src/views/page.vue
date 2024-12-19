@@ -18,10 +18,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { Diagram, Rect } from '../class'
+import { Diagram, Rect , Component } from '../class'
 import { useSymbolStore } from '../store'
 const route = useRoute()
-console.log(route)
 // 引用 Canvas 元素
 const canvas = ref<HTMLCanvasElement | null>(null)
 let ctx: CanvasRenderingContext2D | null = null
@@ -33,13 +32,13 @@ let offsetY = 0 // 网格偏移Y
 let isPanning = false // 是否正在拖动画布
 let startPan = { x: 0, y: 0 } // 拖动起点
 const mousepos = ref({} as { x: string; y: string })
+const oneItem = ref(false)
 let centerX
 let centerY
 let snappedX
 let snappedY
 let diagram
-let oneItem = false
-let currentGraph
+let currentComponent = null
 let ifSnapped
 let connectArr = []
 let currentSymbol
@@ -48,6 +47,8 @@ let isDragging = false
 let currentSnapPoint = null
 let diagramObject: Array<{}>
 // const rect  = new Rect(centerX, centerY, 40, 40, {offsetX:0,offsetY:-30,content:"nihao",show:true}, [{ id:undefined, from_offsetX: 20, from_offsetY: 0, to_offsetX: 40, to_offsetY: 0, connectedId: undefined }])
+
+let isFetchingSymbol = false;
 
 // 画布尺寸更新
 function resizeCanvas() {
@@ -80,21 +81,34 @@ onMounted(() => {
       // 绑定鼠标事件
       const canvasElement = canvas.value
 
+      window.api.saveFile(()=>{return JSON.stringify(diagram)})
+
+      window.api.createFile(()=>{
+        diagram = new Diagram(ctx)
+        draw()
+      })
+
+      window.api.openFile((data)=>{
+        createDiagramFromFile(JSON.parse(data))
+        draw()
+      })
+
       window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' || e.key === 'Esc') {
-          if (currentGraph) {
-            diagram.removeComponent(currentGraph)
-            currentGraph = null
+          if (currentComponent) {
+            diagram.removeComponent(currentComponent)
+            currentComponent = null
           }
           currentSymbol = null
           isDragging = false
-          window.placeItemName = ''
-          oneItem = false
+          window.placeItemName = {}
+          oneItem.value = false
+          isFetchingSymbol = false
           draw()
         }
         if (e.key === 'Backspace' || e.keyCode === 8) {
-          if (currentSymbol) {
-            diagram.removeComponent(currentSymbol)
+          if (currentComponent) {
+            diagram.removeComponent(currentComponent)
             draw()
           }
         }
@@ -102,6 +116,7 @@ onMounted(() => {
 
       // 处理鼠标按下
       canvasElement.addEventListener('mousedown', (e) => {
+        e.stopPropagation()
         if (e.ctrlKey) {
           isPanning = true
           isDragging = false
@@ -111,13 +126,15 @@ onMounted(() => {
           const mouseX = e.offsetX / scale - offsetX
           const mouseY = e.offsetY / scale - offsetY
 
-          currentSymbol = diagram.getComponent(mouseX, mouseY)
-          useSymbolStore().$state.currentSymbol = currentSymbol
-          if (currentSymbol) {
+          currentComponent = diagram.getComponent(mouseX, mouseY)
+          useSymbolStore().$state.currentComponent = currentComponent
+          if (currentComponent) {
             isDragging = true
           }
 
           if (ifSnapped) {
+            // console.log(diagram.getPinId(snappedX, snappedY))
+            // console.log(connectArr)
             if (connectArr.length == 2) {
               connectArr.shift()
               connectArr.push(diagram.getPinId(snappedX, snappedY))
@@ -143,10 +160,11 @@ onMounted(() => {
               }
             }
 
-            if (window.placeItemName) {
-              oneItem = false
-              console.log(currentGraph.id)
+            if (window.placeItemName&&JSON.stringify(window.placeItemName)!=="{}") {
+                oneItem.value = false
+                isFetchingSymbol = false
             }
+
           }
         }
       })
@@ -172,39 +190,32 @@ onMounted(() => {
           // 动态吸附到网格交叉点
           currentSnapPoint = snapToGridWithThreshold(mouseX, mouseY)
 
-          if (window.placeItemName) {
-            if (!oneItem) {
-              const GraphName =
-                window.placeItemName.charAt(0).toUpperCase() + window.placeItemName.slice(1)
-              const moduleExports = await import('../class/index')
-              const moduleExportsWithIndexSignature = moduleExports as { [key: string]: any }
-              const Graph = moduleExportsWithIndexSignature[GraphName]
-              currentGraph = new Graph(
-                currentSnapPoint.x,
-                currentSnapPoint.y,
-                40,
-                40,
-                { offsetX: 0, offsetY: -30, content: 'nihao', show: true },
-                [
-                  {
-                    id: undefined,
-                    from_offsetX: 20,
-                    from_offsetY: 0,
-                    to_offsetX: 40,
-                    to_offsetY: 0,
-                    connectedId: undefined
-                  }
-                ]
-              )
-              diagram.addComponent(currentGraph)
-              oneItem = true
+          if (window.placeItemName&&JSON.stringify(window.placeItemName)!="{}") {
+            // console.log(window.placeItemName)
+            if (!oneItem.value) {
+              if(!isFetchingSymbol){
+                isFetchingSymbol = true
+                const data = await window.api.getSymbol(window.placeItemName.libraryName, window.placeItemName.symbolName)
+                const componentData = JSON.parse(data)
+                if(JSON.stringify(componentData) == "{}"){
+                }else{
+                  createComponentFromFile(componentData).then((data)=>{
+                    currentComponent = data
+                    diagram.addComponent(currentComponent)
+                    draw()
+                  })
+                }
+                oneItem.value = true
+              }
             } else {
-              currentGraph.changePos(currentSnapPoint.x, currentSnapPoint.y)
+              if(currentComponent){
+                currentComponent.changePos(currentSnapPoint.x, currentSnapPoint.y)
+              }
             }
           }
 
           if (isDragging) {
-            currentSymbol.changePos(mouseX, mouseY)
+            currentComponent.changePos(currentSnapPoint.x, currentSnapPoint.y)
           }
 
           draw()
@@ -218,7 +229,7 @@ onMounted(() => {
         const mouseY = e.offsetY / scale - offsetY
         currentSnapPoint = snapToGrid(mouseX, mouseY)
         if (isDragging) {
-          currentSymbol.changePos(currentSnapPoint.x, currentSnapPoint.y)
+          currentComponent.changePos(currentSnapPoint.x, currentSnapPoint.y)
         }
         isPanning = false
         isDragging = false
@@ -249,6 +260,65 @@ onMounted(() => {
     }
   }
 })
+
+
+async function createDiagramFromFile(componentsData) {
+  // 创建一个数组来存储所有的组件实例
+  diagram = new Diagram(ctx)
+
+  // 遍历每个组件数据
+  for (const componentData of componentsData.components) {
+    try {
+      // 解构组件数据中的属性
+      const { centerX, centerY, toolTip, pins, symbols } = componentData;
+
+      // 创建symbols数组，并等待所有Promise解决
+      const symbolInstances = await Promise.all(symbols.map(async (symbol) => {
+        const moduleExports = await import('../class/index');
+        const SymbolClass = moduleExports[symbol.type];
+        const currentSymbolInstance = new SymbolClass(
+          symbol.from_offsetX,
+          symbol.from_offsetY,
+          symbol.to_offsetX,
+          symbol.to_offsetY
+        );
+        return currentSymbolInstance;
+      }));
+
+      // 创建Component实例
+      const ComponentClass = await import('../class/index').then(m => m[componentData.type]);
+      const component = new ComponentClass(centerX, centerY, toolTip, pins, symbolInstances);
+
+      // 将组件实例添加到数组中
+      diagram.addComponent(component);
+    } catch (err) {
+      console.error('Error creating component:', err);
+    }
+  }
+
+  // 返回所有组件实例的数组
+  return diagram;
+}
+
+
+async function createComponentFromFile(componentData) {
+  const { centerX, centerY, toolTip, pins, symbols } = componentData;
+  // 创建symbols数组，并等待所有Promise解决
+  const symbolInstances = await Promise.all(symbols.map(async (symbol) => {
+    const moduleExports = await import('../class/index');
+    const BasicSymbol = moduleExports[symbol.type];
+    const currentBasicSymbolInstance = new BasicSymbol(
+      symbol.from_offsetX,
+      symbol.from_offsetY,
+      symbol.to_offsetX,
+      symbol.to_offsetY
+    );
+    return currentBasicSymbolInstance;
+  }));
+  // 创建Component实例
+  const component = new Component(currentSnapPoint.x, currentSnapPoint.y, toolTip, pins, symbolInstances);
+  return component;
+}
 
 // 绘制网格
 function drawGrid() {
@@ -386,6 +456,7 @@ function draw() {
   top: 5%;
   border: 1px solid rgb(185, 185, 185);
   background-color: white;
+  z-index: 1000;
 }
 .posBtn {
   position: fixed;

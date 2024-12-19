@@ -1,61 +1,40 @@
-import { RectType, TriangleType, LineType } from "./type";
+import { ComponentType, BasicSymbol, RectType, LineType, TriangleType } from "./types";
 
 class Diagram {
-  #components
-  #ctx
-  #centerX
-  #centerY
-  #componentId
-  #pinId
+  components: ComponentType[];
+  #ctx: CanvasRenderingContext2D;
+  #componentId: number;
+  #pinId: number;
 
-  constructor(ctx) {
-    this.#components = [];
-    this.#ctx = ctx
-    this.#componentId = 1
-    this.#pinId = 1
+  constructor(ctx: CanvasRenderingContext2D) {
+    this.components = [];
+    this.#ctx = ctx;
+    this.#componentId = 1;
+    this.#pinId = 1;
   }
 
-  addComponent(component) {
-    this.#components.push(component);
-    component.id = this.#componentId
-    this.#componentId++
-    if(component&&component.pins){
+  addComponent(component: ComponentType) {
+    this.components.push(component);
+    component.id = this.#componentId;
+    this.#componentId++;
+    if (component.pins) {
       component.pins.forEach((pin) => {
-        pin.id = this.#pinId
-        this.#pinId++
-      })
+        pin.id = this.#pinId;
+        this.#pinId++;
+      });
     }
   }
 
-  changeSize(newX, newY) {
-    this.#centerX = newX
-    this.#centerY = newY
-  }
-
-  removeComponent(component) {
-    if (component&&component.pins) {
-      const pinsToUndefined = component.pins.map((pin) => {
-        return pin.connectedId
-      })
-      this.#components.forEach((component) => {
-        if (component&&component.pins) {
-          component.pins.forEach((pin) => {
-            if (pinsToUndefined.includes(pin.id)) {
-              pin.connectedId = undefined
-            }
-          })
-        }
-      })
-    }
-
-    if (this.#components.indexOf(component) !== -1) {
-      this.#components.splice(this.#components.indexOf(component), 1)
+  removeComponent(component: ComponentType) {
+    const index = this.components.indexOf(component);
+    if (index !== -1) {
+      this.components.splice(index, 1);
     }
   }
 
-  getComponent(mouseX, mouseY) {
-    for (let i = this.#components.length - 1; i >= 0; i--) {
-      const component = this.#components[i];
+  getComponent(mouseX: number, mouseY: number): ComponentType | null {
+    for (let i = this.components.length - 1; i >= 0; i--) {
+      const component = this.components[i];
       if (this.isPointInComponent(mouseX, mouseY, component)) {
         return component;
       }
@@ -63,10 +42,9 @@ class Diagram {
     return null;
   }
 
-  getPinId(mouseX, mouseY) {
-    for (let i = this.#components.length - 1; i >= 0; i--) {
-      const component = this.#components[i];
-      for (let pin of component.pins) {
+  getPinId(mouseX: number, mouseY: number): number | null {
+    for (const component of this.components) {
+      for (const pin of component.pins) {
         if (this.isPointInPin(mouseX, mouseY, pin, component)) {
           return pin.id;
         }
@@ -75,39 +53,56 @@ class Diagram {
     return null;
   }
 
-  connectPin(pinid1, pinid2) {
-    const pin1 = this.getPinById(pinid1);
-    const pin2 = this.getPinById(pinid2);
-    if (pin1 && pin2 && pin1.connectedId === undefined && pin2.connectedId === undefined) {
-      pin1.connectedId = pinid2;
-      pin2.connectedId = pinid1;
-      this.#ctx.beginPath()
-      this.#ctx.moveTo(pin1.position.x, pin1.position.y)
-      this.#ctx.lineTo(pin2.position.x, pin2.position.y)
-      this.#ctx.stroke(); // 进行绘制
-    }
+  connectPin(pinId1: number, pinId2: number) {
+    const component1 = this.getComponentByPinId(pinId1);
+    const component2 = this.getComponentByPinId(pinId2);
+    component1?.pins.forEach((pin1)=>{
+      if(pin1.id === pinId1){
+        component2?.pins.forEach((pin2)=>{
+          if(pin2.id === pinId2){
+            if(pin1.connectedId == undefined&&pin2.connectedId== undefined){
+              pin1.connectedId = pin2.id
+              pin2.connectedId = pin1.id
+              this.#ctx.beginPath()
+              this.#ctx.moveTo(component1.centerX+pin1.to_offsetX,component1.centerY+pin1.to_offsetY)
+              this.#ctx.lineTo(component2.centerX+pin2.to_offsetX,component2.centerY+pin2.to_offsetY)
+              this.#ctx.stroke()
+            }
+          }
+        })
+      }
+    })
   }
 
-  // 辅助函数：检查点是否在组件内
-  isPointInComponent(mouseX, mouseY, component) {
+  // Helper functions
+  isPointInComponent(mouseX: number, mouseY: number, component: ComponentType): boolean {
     const x = mouseX - component.centerX;
     const y = mouseY - component.centerY;
-    return Math.pow(x, 2) + Math.pow(y, 2) <= Math.pow(component.width / 2, 2);
+    return Math.pow(x, 2) + Math.pow(y, 2) <= Math.pow(10, 2); // Assuming a radius of 10 for simplicity
   }
 
-  // 辅助函数：检查点是否在引脚上
-  isPointInPin(mouseX, mouseY, pin, component) {
+  isPointInPin(mouseX: number, mouseY: number, pin, component: ComponentType): boolean {
     const pinX = mouseX - (component.centerX + pin.to_offsetX);
     const pinY = mouseY - (component.centerY + pin.to_offsetY);
-    return Math.pow(pinX, 2) + Math.pow(pinY, 2) <= Math.pow(5, 2); // 假设引脚半径为5
+    return Math.pow(pinX, 2) + Math.pow(pinY, 2) <= Math.pow(5, 2); // Assuming pin radius is 5
   }
 
-  // 辅助函数：根据id获取引脚
-  getPinById(pinId) {
-    for (const component of this.#components) {
+  getComponentByPinId(pinId: number): Component | null {
+    for (const component of this.components) {
       for (const pin of component.pins) {
         if (pin.id === pinId) {
-          return pin;
+          return component;
+        }
+      }
+    }
+    return null;
+  }
+
+  getPinById(pinId) {
+    for (const component of this.components) {
+      for (const pin of component.pins) {
+        if (pin.id === pinId) {
+          return {position:{x: component.centerX + pin.to_offsetX, y: component.centerY+ pin.to_offsetY},connectedId:pin.connectedId};
         }
       }
     }
@@ -115,18 +110,20 @@ class Diagram {
   }
 
   render() {
-    this.#components.forEach(component => {
-      component.draw(this.#ctx);
+    this.components.forEach(component => {
+      if(component){
+        component.draw(this.#ctx);
+      }
     });
 
-    this.#components.forEach(component => {
-      if(component&&component.pins){
+    this.components.forEach(component => {
+      if (component.pins) {
         component.pins.forEach(pin => {
           if (pin.connectedId !== undefined) {
             const connectedPin = this.getPinById(pin.connectedId);
             if (connectedPin) {
               this.#ctx.beginPath();
-              this.#ctx.moveTo(pin.position.x, pin.position.y);
+              this.#ctx.moveTo(component.centerX + pin.to_offsetX, component.centerY + pin.to_offsetY);
               this.#ctx.lineTo(connectedPin.position.x, connectedPin.position.y);
               this.#ctx.stroke();
             }
@@ -138,138 +135,69 @@ class Diagram {
 }
 
 
-class Line implements LineType {
-  from_X: number;
-  from_Y: number;
-  to_X: number;
-  to_Y: number;
+class Component implements ComponentType {
+  type: "Component" = "Component";
+  id: number | undefined;
+  centerX: number;
+  centerY: number;
   toolTip: {
     offsetX: number;
     offsetY: number;
     content: string;
     show: boolean;
   };
-  type: "line" = "line";
+  pins: Array<{
+    id: number | undefined;
+    from_offsetX: number;
+    from_offsetY: number;
+    to_offsetX: number;
+    to_offsetY: number;
+    connectedId?: number;
+  }>;
+  symbols: BasicSymbol[];
+
   constructor(
-    from_X: number, 
-    from_Y: number, 
-    to_X: number, 
-    to_Y: number, 
+    centerX: number,
+    centerY: number,
     toolTip: {
       offsetX: number;
       offsetY: number;
       content: string;
       show: boolean;
-    }
-  ){
-    this.from_X = from_X
-    this.from_Y = from_Y
-    this.to_X = to_X
-    this.to_Y = to_Y
-    this.toolTip = toolTip
-  }
-
-  preview(mouseX: number, mouseY: number){
-    this.to_X = mouseX
-    this.to_Y = mouseY
-  }
-
-  draw(ctx: CanvasRenderingContext2D) {
-    ctx.beginPath();
-    ctx.moveTo(this.from_X,this.from_Y)
-    ctx.lineTo(this.to_X,this.to_Y)
-    ctx.stroke();
-
-    if (this.toolTip.show && this.toolTip.content) {
-      ctx.font = '10px Arial';
-      ctx.fillStyle = 'black';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(this.toolTip.content, (this.from_X+this.to_X)/2 + this.toolTip.offsetX, (this.from_Y+this.to_Y)/2 + this.toolTip.offsetY);
-    }
-  }
-
-}
-
-class Rect implements RectType {
-  id: number | undefined;
-  centerX: number;
-  centerY: number;
-  width: number;
-  height: number;
-  toolTip: {
-    offsetX: number;
-    offsetY: number;
-    content: string;
-    show: boolean;
-  };
-  pins: Array<{
-    id: number | undefined;
-    from_offsetX: number;
-    from_offsetY: number;
-    to_offsetX: number;
-    to_offsetY: number;
-    connectedId?: number;
-    position: {
-      x: number;
-      y: number;
-    }
-  }>;
-  type: "rect" = "rect";
-
-  constructor(
-    centerX: number, centerY: number, width: number, height: number,
-    toolTip: { offsetX: number; offsetY: number; content: string; show: boolean; },
+    },
     pins: Array<{
-      id: number | undefined; from_offsetX: number; from_offsetY: number; to_offsetX: number; to_offsetY: number; connectedId?: number;
-    }>
+      from_offsetX: number;
+      from_offsetY: number;
+      to_offsetX: number;
+      to_offsetY: number;
+      id?: number;
+      connectedId?: number;
+    }> = [],
+    symbols: BasicSymbol[] = [],
+    id: number | undefined = undefined
   ) {
+    this.id = id;
     this.centerX = centerX;
     this.centerY = centerY;
-    this.width = width;
-    this.height = height;
     this.toolTip = toolTip;
-    this.pins = pins.map(pin => {
-      const newPin = {
-        ...pin,
-        position: {
-          x: centerX + pin.to_offsetX,
-          y: centerY + pin.to_offsetY
-        }
-      };
-      return newPin;
-    });
-  }
-
-  addPin(from_offsetX, from_offsetY, to_offsetX, to_offsetY) {
-    this.pins.push({
-      id: undefined,
-      from_offsetX,
-      from_offsetY,
-      to_offsetX,
-      to_offsetY,
-      connectedId: undefined,
-      position: {
-        x: to_offsetX,
-        y: to_offsetY
-      }
-    })
-  }
-
-  changePos(newX: number, newY: number) {
-    this.centerX = newX
-    this.centerY = newY
-    this.pins.forEach((pin) => {
-      pin.position!.x = this.centerX + pin.to_offsetX
-      pin.position!.y = this.centerY + pin.to_offsetY
-    })
+    this.pins = pins.map(pin => ({
+      ...pin,
+      id: pin.id === undefined ? undefined : pin.id,
+      connectedId: pin.connectedId === undefined ? undefined : pin.connectedId,
+    }));
+    this.symbols = symbols;
   }
 
   draw(ctx: CanvasRenderingContext2D) {
-    // 绘制矩形
-    ctx.rect(this.centerX - this.width / 2, this.centerY - this.height / 2, this.width, this.height);
-    ctx.stroke();
-    // 绘制引脚
+
+    ctx.fillStyle = 'green'
+    ctx.strokeStyle = 'none'
+    ctx.beginPath()
+    ctx.arc(this.centerX, this.centerY, 1,0,Math.PI * 2)
+    ctx.fill()
+
+    this.symbols.forEach(symbol => symbol.draw(this.centerX,this.centerY,ctx));
+
     this.pins.forEach(pin => {
       ctx.beginPath();
       let bitX = 0
@@ -292,131 +220,127 @@ class Rect implements RectType {
       ctx.arc(this.centerX + pin.to_offsetX, this.centerY + pin.to_offsetY, 2, 0, Math.PI * 2)
       ctx.stroke();
     });
-    //绘制tooltip
+
     if (this.toolTip.show && this.toolTip.content) {
-      ctx.font = '10px Arial';
+      ctx.font = '12px Arial';
       ctx.fillStyle = 'black';
       ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
       ctx.fillText(this.toolTip.content, this.centerX + this.toolTip.offsetX, this.centerY + this.toolTip.offsetY);
     }
+
   }
-}
 
+  changePos(mouseX:number,mouseY:number){
+      this.centerX = mouseX
+      this.centerY = mouseY
+  }
 
-class Triangle implements TriangleType {
-  id: number | undefined;
-  centerX: number;
-  centerY: number;
-  width: number;
-  height: number;
-  toolTip: {
-    offsetX: number;
-    offsetY: number;
-    content: string;
-    show: boolean;
-  };
-  pins: Array<{
-    id: number | undefined;
-    from_offsetX: number;
-    from_offsetY: number;
-    to_offsetX: number;
-    to_offsetY: number;
-    connectedId?: number;
-    position: {
-      x: number;
-      y: number;
+  getPinById(pinId: number): { component: ComponentType, to_offsetX: number, to_offsetY: number } | null {
+    for (const pin of this.pins) {
+      if (pin.id === pinId) {
+        return { component: this, to_offsetX: pin.to_offsetX, to_offsetY: pin.to_offsetY };
+      }
     }
-  }>;
-  type: "triangle" = "triangle";
-
-  constructor(centerX: number, centerY: number, width: number, height: number, toolTip: { offsetX: number; offsetY: number; content: string; show: boolean; }, pins: Array<{ id: number | undefined; from_offsetX: number; from_offsetY: number; to_offsetX: number; to_offsetY: number; connectedId?: number; }>) {
-    this.centerX = centerX;
-    this.centerY = centerY;
-    this.width = width;
-    this.height = height;
-    this.toolTip = toolTip;
-    this.pins = pins.map(pin => {
-      const newPin = {
-        ...pin,
-        position: {
-          x: centerX + pin.to_offsetX,
-          y: centerY + pin.to_offsetY
-        }
-      };
-      return newPin;
-    });
+    return null;
   }
 
-  addPin(from_offsetX, from_offsetY, to_offsetX, to_offsetY) {
+  addSymbol(symbol:BasicSymbol){
+    this.symbols.push(symbol)
+  }
+
+
+  addPin(from_offsetX,from_offsetY,to_offsetX,to_offsetY){
     this.pins.push({
-      id: undefined,
       from_offsetX,
       from_offsetY,
       to_offsetX,
       to_offsetY,
-      connectedId: undefined,
-      position: {
-        x: to_offsetX,
-        y: to_offsetY
-      }
+      id:undefined,
+      connectedId:undefined,
     })
   }
 
-  changePos(newX: number, newY: number) {
-    this.centerX = newX
-    this.centerY = newY
-    this.pins.forEach((pin) => {
-      pin.position!.x = this.centerX + pin.to_offsetX
-      pin.position!.y = this.centerY + pin.to_offsetY
-    })
+}
+
+// Implementing BasicSymbol and its subclasses
+abstract class BasicSymbol implements BasicSymbol {
+  centerX: number;
+  centerY: number;
+  abstract draw(centerX:number,centerY:number,ctx: CanvasRenderingContext2D): void;
+  constructor(centerX: number, centerY: number, draw: (ctx: CanvasRenderingContext2D) => void) {
+    this.centerX = centerX;
+    this.centerY = centerY;
+  }
+}
+
+class Line extends BasicSymbol implements LineType {
+  type: "Line" = "Line";
+  from_offsetX: number;
+  from_offsetY: number;
+  to_offsetX: number;
+  to_offsetY: number;
+
+  constructor(from_offsetX: number, from_offsetY: number, to_offsetX: number, to_offsetY: number, draw: (ctx: CanvasRenderingContext2D) => void) {
+    super((from_offsetX + to_offsetX) / 2, (from_offsetY + to_offsetY) / 2, draw);
+    this.from_offsetX = from_offsetX;
+    this.from_offsetY = from_offsetY;
+    this.to_offsetX = to_offsetX;
+    this.to_offsetY = to_offsetY;
   }
 
-  draw(ctx: CanvasRenderingContext2D) {
-    // 绘制三角形
+  draw(centerX:number,centerY:number,ctx: CanvasRenderingContext2D) {
     ctx.beginPath();
-    ctx.moveTo(this.centerX, this.centerY - this.height / 2)
-    ctx.lineTo(this.centerX - this.width / 2, this.centerY + this.height / 2)
-    ctx.lineTo(this.centerX + this.width / 2, this.centerY + this.height / 2)
+    ctx.moveTo(centerX+this.from_offsetX, centerY+this.from_offsetY);
+    ctx.lineTo(centerX+this.to_offsetX, centerY+this.to_offsetY);
+    ctx.stroke();
+  }
+
+  preview(to_offsetX,to_offsetY){
+    this.to_offsetX = to_offsetX
+    this.to_offsetY = to_offsetY
+  }
+
+}
+
+class Rect extends BasicSymbol implements RectType {
+  type: "Rect" = "Rect";
+  width: number;
+  height: number;
+
+  constructor(centerX: number, centerY: number, width: number, height: number, draw: (ctx: CanvasRenderingContext2D) => void) {
+    super(centerX, centerY, draw);
+    this.width = width;
+    this.height = height;
+  }
+
+  draw(centerX:number,centerY:number,ctx: CanvasRenderingContext2D) {
+    ctx.rect(centerX + this.centerX - this.width / 2,centerY + this.centerY - this.height / 2, this.width, this.height);
+    ctx.stroke();
+  }
+
+}
+
+class Triangle extends BasicSymbol implements TriangleType {
+
+  type: "Triangle" = "Triangle";
+  width: number;
+  height: number;
+
+  constructor(centerX: number, centerY: number, width: number, height: number, draw: (ctx: CanvasRenderingContext2D) => void) {
+    super(centerX, centerY, draw);
+    this.width = width;
+    this.height = height;
+  }
+
+  draw(centerX:number,centerY:number,ctx: CanvasRenderingContext2D) {
+    ctx.beginPath();
+    ctx.moveTo(centerX+this.centerX, centerY+this.centerY - this.height / 2);
+    ctx.lineTo(centerX+this.centerX - this.width / 2, centerY+this.centerY + this.height / 2);
+    ctx.lineTo(centerX+this.centerX + this.width / 2, centerY+this.centerY + this.height / 2);
     ctx.closePath();
     ctx.stroke();
-    // 绘制引脚
-    this.pins.forEach(pin => {
-      ctx.beginPath();
-      let bitX = 0
-      let bitY = 0
-      if (pin.to_offsetX - pin.from_offsetX > 0) {
-        bitX = -2
-      } else if (pin.to_offsetX - pin.from_offsetX < 0) {
-        bitX = 2
-      } else {
-        if (pin.to_offsetY - pin.from_offsetY > 0) {
-          bitY = -2
-        } else {
-          bitY = 2
-        }
-      }
-      ctx.moveTo(this.centerX + pin.from_offsetX, this.centerY + pin.from_offsetY);
-      ctx.lineTo(this.centerX + pin.to_offsetX + bitX, this.centerY + pin.to_offsetY + bitY);
-      ctx.stroke();
-      ctx.beginPath()
-      ctx.arc(this.centerX + pin.to_offsetX, this.centerY + pin.to_offsetY, 2, 0, Math.PI * 2)
-      ctx.stroke();
-    });
-    //绘制tooltip
-    if (this.toolTip.show && this.toolTip.content) {
-      ctx.font = '10px Arial';
-      ctx.fillStyle = 'black';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(this.toolTip.content, this.centerX + this.toolTip.offsetX, this.centerY + this.toolTip.offsetY);
-    }
   }
+
 }
 
-export {
-  Diagram,
-  Rect,
-  Triangle,
-  Line
-};
+export { Diagram, Line, Rect, Triangle, Component };

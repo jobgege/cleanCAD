@@ -1,7 +1,7 @@
 declare global {
   interface Window {
     electron: ElectronAPI
-    api: unknown
+    api: ElectronAPI
     placeItemName: string
   }
 }

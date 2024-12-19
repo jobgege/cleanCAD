@@ -1,12 +1,44 @@
 import { contextBridge , ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import { rejects } from 'assert'
+import { create } from 'domain'
 
 // Custom APIs for renderer
 const api = {
-  routechange: (callbak) => ipcRenderer.on("routechange",()=>{
-    callbak()
+  routechange: (callback) => ipcRenderer.on("routechange",()=>{
+    callback()
   }),
+  createLibrary: (callback) => ipcRenderer.on("createLibrary",()=>{
+    callback()
+  }),
+  createSymbol: (callback) => ipcRenderer.on("createSymbol",()=>{
+    callback()
+  }),
+  saveLibrary: (getlibraryData,getSymbolData) => ipcRenderer.on("saveLibrary",()=>{
+    ipcRenderer.send("saveLibrary",getlibraryData(),getSymbolData())
+  }),
+  createFile:(callback)=> ipcRenderer.on("createFile",()=>{
+    callback()
+  }),
+  saveFile:(getDiagramData)=> ipcRenderer.on("saveFile",()=>{
+    ipcRenderer.send("saveFile",getDiagramData())
+  }),
+  openFile:(callback)=> ipcRenderer.on("openFile",(_,data)=>{
+    if(data.success){
+      callback(data.data)
+    }
+  }),
+  getSymbol:(libraryLabel,symbolLabel)=>{
+    return new Promise((resolve,reject)=>{
+      ipcRenderer.send("getSymbol",libraryLabel,symbolLabel)
+      ipcRenderer.once("getSymbolResponse", (event, data) => {
+        if(data.success){
+          resolve(data.data)
+        }else{
+          reject(data.error)
+        }
+      })
+    })
+  },
   // getDrawFn: (name) => {
   //   return new Promise((resolve,reject)=>{
   //     ipcRenderer.send("getDrawFn",name)

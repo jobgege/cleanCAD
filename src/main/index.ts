@@ -1,12 +1,16 @@
-import { app, shell, BrowserWindow, ipcMain, Menu } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, Menu, webContents , dialog } from 'electron'
 const path = require('path');
 const fs = require('fs');
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
+let mainWindow
+let symbolEditorWindow
+let diagramFilePath
+
 function createWindow(): void {
   // Create the browser window.
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -24,7 +28,7 @@ function createWindow(): void {
           label: '新建文件',
           accelerator: 'Ctrl+N',
           click: () => {
-            console.log('新建文件');
+            createFile();
           }
         },
         {
@@ -34,7 +38,7 @@ function createWindow(): void {
           label: '打开文件',
           accelerator: 'Ctrl+O',
           click: () => {
-            console.log('打开文件');
+            openFile();
           }
         },
         {
@@ -44,7 +48,7 @@ function createWindow(): void {
           label: '保存文件',
           accelerator: 'Ctrl+S',
           click: () => {
-            console.log('保存文件');
+            mainWindow.webContents.send("saveFile");
           }
         },
       ]
@@ -98,6 +102,37 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  async function createFile() {
+    try {
+      // 确保userData路径下的diagram目录存在
+      const userDataPath = app.getPath('userData');
+      const diagramPath = path.join(userDataPath, 'diagram');
+      await fs.promises.mkdir(diagramPath, { recursive: true });
+  
+      const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+        title: 'Create File',
+        defaultPath: path.join(diagramPath, 'untitled.json')
+      });
+  
+      if (canceled || !filePath) {
+        return;
+      }
+  
+      // 在用户选择的路径创建一个空文件
+      await fs.promises.writeFile(filePath, '', 'utf8'); // 写入空内容
+  
+      // 发送文件名到渲染进程
+      diagramFilePath = filePath;
+      mainWindow.webContents.send("createFile", filePath); // 传递文件路径给渲染进程
+  
+      // 显示成功消息
+      dialog.showMessageBox(mainWindow, { message: 'File created successfully.' });
+    } catch (err) {
+      console.error('Error:', err); // 打印错误信息到控制台
+      dialog.showErrorBox('Error', `Failed to create file: ${err.message}`); // 显示错误信息
+    }
+  }
+
 
   // ipcMain.on("getDrawFn", async (event, name) => {
   //   try {
@@ -122,6 +157,75 @@ function createWindow(): void {
   //     event.reply("getDrawFnResponse", { success: false, error: error.message });
   //   }
   // });
+
+  ipcMain.on("saveFile", async (_, data) => {
+    const userDataPath = app.getPath('userData');
+    const diagramPath = path.join(userDataPath, 'diagram');
+  
+    if (!diagramFilePath) {
+      // 如果diagramFilePath未定义，打开保存文件对话框让用户选择路径
+      const { canceled, filePath } = await dialog.showSaveDialog({
+        title: 'Save Diagram',
+        defaultPath: path.join(diagramPath, 'untitled.json'), // 设置默认路径为diagram文件夹下的diagram.json
+        filters: [
+          { name: 'JSON Files', extensions: ['json'] }
+        ]
+      });
+  
+      if (canceled) {
+        // 用户取消操作
+        return;
+      }
+      if (filePath) {
+        diagramFilePath = filePath; // 更新savePath为用户选择的路径
+      }
+    }
+  
+    if (diagramFilePath) {
+      try {
+        await fs.promises.writeFile(diagramFilePath, JSON.stringify(JSON.parse(data), null, 2), 'utf8');
+        // 文件保存成功的处理...
+        console.log('File saved successfully:', diagramFilePath);
+      } catch (error) {
+        // 文件保存失败的处理...
+        console.error('Error saving file:', error);
+      }
+    }
+
+    dialog.showMessageBox(mainWindow, { message: 'File saved successfully.' });
+
+  });
+
+  function openFile() {
+    // 获取默认路径
+    const userDataPath = app.getPath('userData');
+    const diagramPath = path.join(userDataPath, 'diagram');
+  
+    dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [
+        { name: 'JSON Files', extensions: ['json'] }
+      ],
+      defaultPath: diagramPath
+    }).then(result => {
+      if (!result.canceled && result.filePaths.length > 0) {
+        const filePath = result.filePaths[0];
+        fs.readFile(filePath, 'utf8', (err, data) => {
+          if (err) {
+            console.error('Error reading file:', err);
+            mainWindow.webContents.send('openFile', {success:false,error:err.message});
+          } else {
+            diagramFilePath = filePath
+            mainWindow.webContents.send('openFile', {success:true,data:data});
+            dialog.showMessageBox(mainWindow, { message: 'File open successfully.' });
+          }
+        });
+      }
+    }).catch(err => {
+      console.error('Error opening file dialog:', err);
+      mainWindow.webContents.send('file-dialog-error', err.message);
+    });
+  }
 
 
   ipcMain.on("getSymbolLibrary", async (event) => {
@@ -167,11 +271,36 @@ function createWindow(): void {
         };
       }));
   
-      console.log(libraries);
       event.reply("getSymbolLibraryResponse", { success: true, data: JSON.stringify(libraries) });
     } catch (error:any) {
       console.log(error);
       event.reply("getSymbolLibraryResponse", { success: false, error: error.message });
+    }
+  });
+
+  ipcMain.on("getSymbol", async (event, libraryLabel, symbolLabel) => {
+    try {
+      const userDataPath = app.getPath('userData');
+      const SymbolLibraryPath = path.join(userDataPath, 'SymbolLibrary');
+      const filePath = path.join(SymbolLibraryPath, String(libraryLabel), `${String(symbolLabel)}.json`);
+  
+      // 确保目录存在
+      await fs.promises.mkdir(SymbolLibraryPath, { recursive: true });
+      await fs.promises.mkdir(path.join(SymbolLibraryPath, String(libraryLabel)), { recursive: true });
+  
+      // 检查文件是否存在，如果不存在则创建空文件
+      const fileExists = await fs.promises.stat(filePath).catch(() => false);
+      if (!fileExists) {
+        await fs.promises.writeFile(filePath, '{}', 'utf8');
+        event.reply("getSymbolResponse", { success: true, data: "{}" });
+        return;
+      }
+  
+      const content = await fs.promises.readFile(filePath, 'utf8');
+      event.reply("getSymbolResponse", { success: true, data: content.trim() === '' ? "{}" : content });
+    } catch (error) {
+      console.error('Error reading symbol file:', error);
+      event.reply("getSymbolResponse", { success: false, error: "Failed to read symbol file." });
     }
   });
 
@@ -184,7 +313,7 @@ function createWindow(): void {
   }
 }
 
-let symbolEditorWindow
+
 
 
 function createSymbolEditorWindow() {
@@ -213,7 +342,7 @@ function createSymbolEditorWindow() {
         {
           label: '添加库',
           click: () => {
-            console.log('添加库');
+            symbolEditorWindow.webContents.send('createLibrary');
           }
         },
         {
@@ -222,7 +351,7 @@ function createSymbolEditorWindow() {
         {
           label: '新建符号',
           click: () => {
-            console.log('新建符号');
+            symbolEditorWindow.webContents.send('createSymbol');
           }
         },
         {
@@ -231,7 +360,7 @@ function createSymbolEditorWindow() {
         {
           label: '保存',
           click: () => {
-            console.log('保存');
+            symbolEditorWindow.webContents.send('saveLibrary');
           }
         },
       ]
@@ -248,6 +377,69 @@ function createSymbolEditorWindow() {
       ]
     }
   ];
+
+  ipcMain.on("saveLibrary", async (_, libraryData, symbolDataJson) => {
+    try {
+      const userDataPath = app.getPath('userData');
+      const SymbolLibraryPath = path.join(userDataPath, 'SymbolLibrary');
+  
+      // 确保SymbolLibraryPath存在
+      await fs.promises.mkdir(SymbolLibraryPath, { recursive: true });
+  
+      // 解析传入的库数据
+      const library = JSON.parse(libraryData);
+  
+      // 递归创建目录和文件
+      for (const lib of library) {
+        const libPath = path.join(SymbolLibraryPath, lib.label);
+        await fs.promises.mkdir(libPath, { recursive: true });
+  
+        for (const symbol of lib.children) {
+          const symbolPath = path.join(libPath, `${symbol.label}.json`);
+          if (!(await fs.promises.stat(symbolPath)).isFile()) {
+            const fileHandler = await fs.promises.open(symbolPath, 'w');
+            await fileHandler.close();
+          }
+        }
+      }
+
+      const symbolData = JSON.parse(symbolDataJson)
+      const symbolPath = path.join(SymbolLibraryPath,symbolData.libraryName, `${symbolData.symbolName}.json`)
+      await fs.promises.writeFile(symbolPath, JSON.stringify(symbolData.content, null, 2), 'utf8');
+
+      dialog.showMessageBox(mainWindow, { message: 'Library saved successfully.' });
+      console.log('Library saved successfully');
+    } catch (error) {
+      console.error('Error saving library:', error);
+    }
+  });
+
+
+  ipcMain.on("getSymbol", async (event, libraryLabel, symbolLabel) => {
+    try {
+      const userDataPath = app.getPath('userData');
+      const SymbolLibraryPath = path.join(userDataPath, 'SymbolLibrary');
+      const filePath = path.join(SymbolLibraryPath, String(libraryLabel), `${String(symbolLabel)}.json`);
+  
+      // 确保目录存在
+      await fs.promises.mkdir(SymbolLibraryPath, { recursive: true });
+      await fs.promises.mkdir(path.join(SymbolLibraryPath, String(libraryLabel)), { recursive: true });
+  
+      // 检查文件是否存在，如果不存在则创建空文件
+      const fileExists = await fs.promises.stat(filePath).catch(() => false);
+      if (!fileExists) {
+        await fs.promises.writeFile(filePath, '{}', 'utf8');
+        event.reply("getSymbolResponse", { success: true, data: "{}" });
+        return;
+      }
+  
+      const content = await fs.promises.readFile(filePath, 'utf8');
+      event.reply("getSymbolResponse", { success: true, data: content.trim() === '' ? "{}" : content });
+    } catch (error) {
+      console.error('Error reading symbol file:', error);
+      event.reply("getSymbolResponse", { success: false, error: "Failed to read symbol file." });
+    }
+  });
 
   const menu = Menu.buildFromTemplate(template);
   symbolEditorWindow.setMenu(menu);

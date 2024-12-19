@@ -1,0 +1,172 @@
+{
+    "components": [
+        {
+            "type": "Component",
+            "id": 1,
+            "centerX": 280,
+            "centerY": 120,
+            "toolTip": {
+                "offsetX": 0,
+                "offsetY": 0,
+                "content": "",
+                "show": true
+            },
+            "pins": [],
+            "symbols": [
+                {
+                    "centerX": 0,
+                    "centerY": -20,
+                    "type": "Line",
+                    "from_offsetX": 0,
+                    "from_offsetY": 0,
+                    "to_offsetX": 0,
+                    "to_offsetY": -40
+                },
+                {
+                    "centerX": 20,
+                    "centerY": 0,
+                    "type": "Line",
+                    "from_offsetX": 0,
+                    "from_offsetY": 0,
+                    "to_offsetX": 40,
+                    "to_offsetY": 0
+                },
+                {
+                    "centerX": -20,
+                    "centerY": 10,
+                    "type": "Line",
+                    "from_offsetX": 0,
+                    "from_offsetY": 0,
+                    "to_offsetX": -40,
+                    "to_offsetY": 20
+                }
+            ]
+        },
+        {
+            "type": "Component",
+            "id": 2,
+            "centerX": 240,
+            "centerY": 380,
+            "toolTip": {
+                "offsetX": 0,
+                "offsetY": 0,
+                "content": "",
+                "show": true
+            },
+            "pins": [],
+            "symbols": [
+                {
+                    "centerX": 0,
+                    "centerY": -20,
+                    "type": "Line",
+                    "from_offsetX": 0,
+                    "from_offsetY": 0,
+                    "to_offsetX": 0,
+                    "to_offsetY": -40
+                },
+                {
+                    "centerX": 20,
+                    "centerY": 0,
+                    "type": "Line",
+                    "from_offsetX": 0,
+                    "from_offsetY": 0,
+                    "to_offsetX": 40,
+                    "to_offsetY": 0
+                },
+                {
+                    "centerX": -20,
+                    "centerY": 10,
+                    "type": "Line",
+                    "from_offsetX": 0,
+                    "from_offsetY": 0,
+                    "to_offsetX": -40,
+                    "to_offsetY": 20
+                }
+            ]
+        },
+        {
+            "type": "Component",
+            "id": 3,
+            "centerX": 360,
+            "centerY": 180,
+            "toolTip": {
+                "offsetX": 0,
+                "offsetY": 0,
+                "content": "",
+                "show": true
+            },
+            "pins": [],
+            "symbols": [
+                {
+                    "centerX": 0,
+                    "centerY": -20,
+                    "type": "Line",
+                    "from_offsetX": 0,
+                    "from_offsetY": 0,
+                    "to_offsetX": 0,
+                    "to_offsetY": -40
+                },
+                {
+                    "centerX": 20,
+                    "centerY": 0,
+                    "type": "Line",
+                    "from_offsetX": 0,
+                    "from_offsetY": 0,
+                    "to_offsetX": 40,
+                    "to_offsetY": 0
+                },
+                {
+                    "centerX": -20,
+                    "centerY": 10,
+                    "type": "Line",
+                    "from_offsetX": 0,
+                    "from_offsetY": 0,
+                    "to_offsetX": -40,
+                    "to_offsetY": 20
+                }
+            ]
+        },
+        {
+            "type": "Component",
+            "id": 4,
+            "centerX": 360,
+            "centerY": 180,
+            "toolTip": {
+                "offsetX": 0,
+                "offsetY": 0,
+                "content": "",
+                "show": true
+            },
+            "pins": [],
+            "symbols": [
+                {
+                    "centerX": 0,
+                    "centerY": -20,
+                    "type": "Line",
+                    "from_offsetX": 0,
+                    "from_offsetY": 0,
+                    "to_offsetX": 0,
+                    "to_offsetY": -40
+                },
+                {
+                    "centerX": 20,
+                    "centerY": 0,
+                    "type": "Line",
+                    "from_offsetX": 0,
+                    "from_offsetY": 0,
+                    "to_offsetX": 40,
+                    "to_offsetY": 0
+                },
+                {
+                    "centerX": -20,
+                    "centerY": 10,
+                    "type": "Line",
+                    "from_offsetX": 0,
+                    "from_offsetY": 0,
+                    "to_offsetX": -40,
+                    "to_offsetY": 20
+                }
+            ]
+        }
+    ]
+}

@@ -22,13 +22,22 @@
             class="itemList"
             v-for="child in item.children"
             :key="child.label"
-            @click="toggleItem(item, child.label)"
-            @dblclick="dbtoggleItem(child.label)"
+            @click="toggleItem(item, child.label,index)"
+            @dblclick="dbtoggleItem(item.label,child.label)"
             :style="child.label === chooseItem ? 'background-color: #dee2e6;' : ''"
           >
             <span>{{ child.label }}</span>
           </li>
+          <li class="itemList" v-if="addSymbolIndex==index&&isAddSymbol">
+            <input v-model="addSymbolName">
+          </li>
         </ul>
+      </div>
+      <div class="addMenuName" v-if="isAddLibrary">
+        <svg class="icon" aria-hidden="true">
+          <use xlink:href="#icon-jiantou"></use>
+        </svg>
+        <input v-model="addMenuName">
       </div>
     </div>
     <div class="rightPart">
@@ -57,16 +66,25 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Diagram, Rect } from '../class'
-// Canvas相关引用和上下文
+import { Diagram, Component } from '../class'
+
 const canvas = ref(null)
 const canvasDiv = ref(null)
 const addPinIcon = ref()
 const addLine = ref()
-let ctx: CanvasRenderingContext2D | null = null
+const currentSymbol = ref({} as { name: string; drawFn: Function })
+const mousepos = ref({} as { x: string; y: string })
+const isAddLibrary = ref(false)
+const isAddSymbol = ref(false)
+const addMenuName = ref()
+const addSymbolName = ref()
+const currentChooseMenuIndex = ref()
+const addSymbolIndex = ref()
+const searchQuery = ref('')
+const chooseItem = ref('')
+const component = ref()
 
-// Canvas状态变量
-// 网格配置
+let ctx: CanvasRenderingContext2D | null = null
 let gridSize = 20 // 初始网格尺寸
 let scale = 1 // 初始缩放比例
 let offsetX = 0 // 网格偏移X
@@ -75,11 +93,10 @@ let isPanning = false // 是否正在拖动画布
 let startPan = { x: 0, y: 0 } // 拖动起点
 let isDragging = false // 是否在拖动元件
 let currentSnapPoint = null // 网格吸附点
-let dragPoint = { x: 0, y: 0, radius: 4 }
+let centerPoint = { x: 0, y: 0, radius: 2 }
 let centerX
 let centerY
 let diagram
-let currentGraph
 let addPinArray = []
 let addLineArray = []
 let isAddPin = false
@@ -90,69 +107,104 @@ let snappedGridX
 let snappedGridY
 let snappedX
 let snappedY
+let currentBasicSymbol
+let currentComponent
 
-// const rect = new Rect(
-//   centerX,
-//   centerY,
-//   40,
-//   40,
-//   { offsetX: 0, offsetY: -30, content: 'nihao', show: true },
-//   [
-//     {
-//       id: undefined,
-//       from_offsetX: 20,
-//       from_offsetY: 0,
-//       to_offsetX: 40,
-//       to_offsetY: 0,
-//       connectedId: undefined
-//     }
-//   ]
-// )
-const currentSymbol = ref({} as { name: string; drawFn: Function })
-const mousepos = ref({} as { x: string; y: string })
 
-// 初始化画布和上下文
-onMounted(async() => {
+onMounted(async () => {
   if (canvas.value) {
     ctx = canvas.value.getContext('2d')
+    const canvasElement = canvas.value
+
     diagram = new Diagram(ctx)
     resizeCanvas()
-    // 绑定鼠标事件
-    const canvasElement = canvas.value
+    component.value = new Component(centerX,centerY,{offsetX:0,offsetY:0,content:"",show:true})
+    diagram.addComponent(component.value)
+    diagram.render()
 
     const menuData = await window.api.getSymbolLibrary()
     menu.value = JSON.parse(menuData)
 
-    // diagram.addComponent(rect)
-    diagram.render()
+    window.api.createLibrary(()=>{
+      isAddSymbol.value = false
+      addSymbolName.value = ''
+      isAddLibrary.value = true
+    })
 
-    addPinIcon.value.addEventListener("click", ()=>{
+    window.api.createSymbol(()=>{
+      isAddLibrary.value = false
+      addMenuName.value = ''
+      isAddSymbol.value = true
+      addSymbolIndex.value = currentChooseMenuIndex.value
+      if(addSymbolIndex.value!=-1){
+        menu.value[addSymbolIndex.value].isOpen = true
+      }
+    })
+
+    window.api.saveLibrary(()=>{return JSON.stringify(menu.value)},()=>{return JSON.stringify({libraryName:menu.value[currentChooseMenuIndex.value].label,symbolName:chooseItem.value,content:component.value})})
+
+    addPinIcon.value.addEventListener('click', () => {
       isAddPin = true
       isAddLine = false
       addLineArray = []
     })
 
-    addLine.value.addEventListener("click", ()=>{
+    addLine.value.addEventListener('click', () => {
       isAddLine = true
       isAddPin = false
       addPinArray = []
-    });
+    })
 
     window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' || e.key === 'Esc') {
-          isAddPin = false
-          isAddLine = false
-          addPinArray = []
-          addLineArray = []
-          if(currentGraph){
-            diagram.removeComponent(currentGraph)
-          }
+      if (e.key === 'Escape' || e.key === 'Esc') {
+        isAddLibrary.value = false
+        addMenuName.value = ''
+        isAddSymbol.value = false
+        addSymbolName.value = ''
+        isAddPin = false
+        isAddLine = false
+        addPinArray = []
+        addLineArray = []
+        draw()
+      }
+
+      if(e.code == "Enter"&&isAddLibrary.value){
+        if(addMenuName.value&&menu.value.map((item)=>item.label).indexOf(addMenuName.value)==-1){
+          isAddLibrary.value = false
+          menu.value.push(
+            {
+              label: addMenuName.value,
+              isOpen: false,
+              children: []
+            }
+          )
+          addMenuName.value = ''
+        }
+      }
+
+      if (e.key === 'Backspace' || e.keyCode === 8) {
+        if (currentComponent) {
+          diagram.removeComponent(currentComponent)
           draw()
         }
+      }
+
+      if(e.code == "Enter"&&isAddSymbol.value){
+        if(addSymbolName.value){
+          isAddSymbol.value = false
+          menu.value[currentChooseMenuIndex.value].children.push(
+            {
+              label: addSymbolName.value,
+            }
+          )
+          addSymbolName.value = ''
+          addSymbolIndex.value = -1
+        }
+      }
     })
 
     // 处理鼠标按下
-    canvasElement.addEventListener('mousedown', async(e) => {
+    canvasElement.addEventListener('mousedown', async (e) => {
       if (e.ctrlKey) {
         isPanning = true
         startPan.x = e.offsetX
@@ -160,39 +212,48 @@ onMounted(async() => {
       } else {
         const mouseX = e.offsetX / scale - offsetX
         const mouseY = e.offsetY / scale - offsetY
-        if(snapped&&isAddPin){
-          addPinArray.push({x:snappedX-centerX,y:snappedY-centerY})
-          if(addPinArray.length == 2){
-            currentGraph.addPin(addPinArray[0].x,addPinArray[0].y,addPinArray[1].x,addPinArray[1].y)
+
+        currentComponent = diagram.getComponent(mouseX, mouseY)
+        if (currentComponent) {
+          isDragging = true
+        }
+
+        if (snapped && isAddPin) {
+          addPinArray.push({ x: snappedX - centerX, y: snappedY - centerY })
+          if (addPinArray.length == 2) {
+            component.value.addPin(
+              addPinArray[0].x,
+              addPinArray[0].y,
+              addPinArray[1].x,
+              addPinArray[1].y
+            )
             isAddPin = false
             addPinArray = []
+            console.log(JSON.stringify(component.value))
           }
         }
 
-        if(snapped&&isAddLine){
-          if(addLineArray.length == 0){
-            addLineArray.push({x:snappedX,y:snappedY})
-            const GraphName = addLine.value.getAttribute('name')
+        if (snapped && isAddLine) {
+          if (addLineArray.length == 0) {
+            addLineArray.push({ x: snappedX - centerX, y: snappedY - centerY })
+            const BasicSymbolName = addLine.value.getAttribute('name')
             const moduleExports = await import('../class/index')
             const moduleExportsWithIndexSignature = moduleExports as { [key: string]: any }
-            const Graph = moduleExportsWithIndexSignature[GraphName]
-            currentGraph = new Graph(
-              addLineArray[0].x,
-              addLineArray[0].y,
-              mouseX,
-              mouseY,
-              { offsetX: 0, offsetY: -10, content: '', show: false },
-            )
-            diagram.addComponent(currentGraph)
+            const BasicSymbol = moduleExportsWithIndexSignature[BasicSymbolName]
+            currentBasicSymbol = new BasicSymbol(addLineArray[0].x, addLineArray[0].y, mouseX - centerX, mouseY - centerY)
+            component.value.addSymbol(currentBasicSymbol)
             draw()
             isFindToPos = true
-          }
-          else if(addLineArray.length==1&&(addLineArray[0].x!=snappedX||addLineArray[0].y!=snappedY)){
-            addLineArray.push({x:snappedX,y:snappedY})
-            currentGraph.preview(addLineArray[1].x, addLineArray[1].y)
+          } else if (
+            addLineArray.length == 1 &&
+            (addLineArray[0].x != snappedX || addLineArray[0].y != snappedY)
+          ) {
+            addLineArray.push({ x: snappedX - centerX, y: snappedY - centerY })
+            currentBasicSymbol.preview(addLineArray[1].x, addLineArray[1].y)
             addLineArray = []
             isFindToPos = false
-            currentGraph = null
+            currentBasicSymbol = null
+            console.log(JSON.stringify(component.value))
           }
         }
       }
@@ -217,8 +278,12 @@ onMounted(async() => {
         // 动态吸附到网格交叉点
         currentSnapPoint = snapToGridWithThreshold(mouseX, mouseY)
 
-        if(isAddLine&&isFindToPos){
-          currentGraph.preview(mouseX, mouseY)
+        if (isAddLine && isFindToPos) {
+          currentBasicSymbol.preview(mouseX - centerX, mouseY - centerY)
+        }
+
+        if (isDragging) {
+          currentComponent.changePos(mouseX, mouseY)
         }
 
         draw()
@@ -228,6 +293,9 @@ onMounted(async() => {
 
     // 处理鼠标松开
     canvasElement.addEventListener('mouseup', () => {
+      if (isDragging) {
+        currentComponent.changePos(snappedGridX, snappedGridY)
+      }
       isPanning = false
       isDragging = false
     })
@@ -269,8 +337,10 @@ const resizeCanvas = () => {
   canvas.value.height = canvasDiv.value.clientHeight
   centerX = Math.floor(canvas.value.width / (2 * gridSize)) * gridSize
   centerY = Math.floor(canvas.value.height / (2 * gridSize)) * gridSize
-  if(currentGraph){
-    currentGraph.changePos(centerX, centerY)
+  centerPoint.x = centerX
+  centerPoint.y = centerY
+  if (component.value) {
+    component.value.changePos(centerX, centerY)
   }
   draw()
 }
@@ -279,7 +349,8 @@ const resizeCanvas = () => {
 function drawGrid() {
   if (!ctx) return
 
-  ctx.clearRect(0, 0, canvas.value!.width, canvas.value!.height)
+  ctx.clearRect(0, 0, canvas.value.width, canvas.value.height)
+
   ctx.save()
   ctx.scale(scale, scale)
   ctx.translate(offsetX, offsetY)
@@ -371,8 +442,9 @@ function drawPoint() {
   ctx.scale(scale, scale)
   ctx.translate(offsetX, offsetY)
   ctx.fillStyle = 'red'
+  ctx.strokeStyle = 'none'
   ctx.beginPath()
-  ctx.arc(dragPoint.x, dragPoint.y, dragPoint.radius, 0, Math.PI * 2)
+  ctx.arc(centerPoint.x, centerPoint.y, centerPoint.radius, 0, Math.PI * 2)
   ctx.fill()
   ctx.restore()
 }
@@ -380,9 +452,9 @@ function drawPoint() {
 // 主绘制函数
 function draw() {
   if (!ctx) return
-  drawGrid();
-  drawPoint();
-  (() => {
+  drawGrid()
+  drawPoint()
+  ;(() => {
     ctx.save()
     ctx.scale(scale, scale)
     ctx.translate(offsetX, offsetY)
@@ -401,8 +473,6 @@ const menu = ref([
 ])
 
 
-const searchQuery = ref('')
-const chooseItem = ref('')
 
 const filteredMenu = computed(() => {
   if (!searchQuery.value) return menu.value
@@ -420,44 +490,60 @@ const filteredMenu = computed(() => {
 
 const toggleMenu = (index) => {
   menu.value[index].isOpen = !menu.value[index].isOpen
+  currentChooseMenuIndex.value = index
+  addSymbolIndex.value = -1
 }
 
-const toggleItem = (item, label) => {
+const toggleItem = (item, label,index) => {
   chooseItem.value = label
+  currentChooseMenuIndex.value = index
+  addSymbolIndex.value = -1
 }
 
-const dbtoggleItem = async (label) => {
-
-  if(searchQuery.value){
+const dbtoggleItem = async (libraryLabel,symbolLabel) => {
+  if (searchQuery.value) {
     searchQuery.value = ''
   }
-  if(currentGraph){
-    diagram.removeComponent(currentGraph)
+  const data = await window.api.getSymbol(libraryLabel, symbolLabel)
+  console.log(data)
+  const componentData = JSON.parse(data)
+  chooseItem.value = symbolLabel
+  if(JSON.stringify(componentData) == "{}"){
+    diagram.removeComponent(component.value)
+    component.value = new Component(centerX,centerY,{offsetX:0,offsetY:0,content:"",show:true})
+    diagram.addComponent(component.value)
+    draw()
+  }else{
+    if (component.value) {
+      diagram.removeComponent(component.value)
+    }
+    createComponentFromFile(componentData).then((data)=>{
+      component.value = data
+      diagram.addComponent(component.value)
+      draw()
+    })
   }
-  chooseItem.value = label
-  const GraphName = chooseItem.value.charAt(0).toUpperCase() + chooseItem.value.slice(1)
-  const moduleExports = await import('../class/index')
-  const moduleExportsWithIndexSignature = moduleExports as { [key: string]: any }
-  const Graph = moduleExportsWithIndexSignature[GraphName]
-  currentGraph = new Graph(
-    centerX,
-    centerY,
-    40,
-    40,
-    { offsetX: 0, offsetY: -30, content: 'nihao', show: true },
-    [
-      {
-        id: undefined,
-        from_offsetX: 20,
-        from_offsetY: 0,
-        to_offsetX: 40,
-        to_offsetY: 0,
-        connectedId: undefined
-      }
-    ]
-  )
-  diagram.addComponent(currentGraph)
   draw()
+}
+
+
+async function createComponentFromFile(componentData) {
+  const { centerX, centerY, toolTip, pins, symbols } = componentData;
+  // 创建symbols数组，并等待所有Promise解决
+  const symbolInstances = await Promise.all(symbols.map(async (symbol) => {
+    const moduleExports = await import('../class/index');
+    const BasicSymbol = moduleExports[symbol.type];
+    const currentBasicSymbolInstance = new BasicSymbol(
+      symbol.from_offsetX,
+      symbol.from_offsetY,
+      symbol.to_offsetX,
+      symbol.to_offsetY
+    );
+    return currentBasicSymbolInstance;
+  }));
+  // 创建Component实例
+  const component = new Component(centerX, centerY, toolTip, pins, symbolInstances);
+  return component;
 }
 
 function goToPoint() {
@@ -471,6 +557,7 @@ function goToPoint() {
   currentSnapPoint.value = { x: 0, y: 0, snapped: false }
   draw()
 }
+
 
 </script>
 
@@ -585,16 +672,47 @@ main {
       align-items: center;
       cursor: pointer;
       padding: 2px;
+      box-sizing: border-box;
     }
 
     ul > li {
       padding: 2px 0;
       padding-left: 20px;
+      display: flex;
       cursor: pointer;
       &:hover {
         background-color: #f8f9fa;
       }
+      input{
+        width: 95%;
+        outline:none;
+      }
     }
   }
+
+  .addMenuName{
+    height: 20px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 2px;
+    box-sizing: border-box;
+
+    .icon{
+      height: 0.9em;
+      width: 0.9em;
+      margin-right: 5px;
+      vertical-align: center;
+    }
+
+    input{
+      width: 100%;
+      height: 80%;
+      outline: none;
+    }
+
+  }
+
 }
 </style>

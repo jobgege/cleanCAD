@@ -2,7 +2,7 @@ import { ref } from "vue"
 import { defineStore } from 'pinia'
 export const useSymbolStore = defineStore('user', {
     state:()=>({
-        currentSymbol:ref()
+        currentComponent:ref()
     }),
     persist: true
 })

@@ -107,6 +107,7 @@ function createWindow(): void {
       // 确保userData路径下的diagram目录存在
       const userDataPath = app.getPath('userData');
       const diagramPath = path.join(userDataPath, 'diagram');
+      
       await fs.promises.mkdir(diagramPath, { recursive: true });
   
       const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
@@ -161,6 +162,8 @@ function createWindow(): void {
   ipcMain.on("saveFile", async (_, data) => {
     const userDataPath = app.getPath('userData');
     const diagramPath = path.join(userDataPath, 'diagram');
+
+    await fs.promises.mkdir(diagramPath, { recursive: true });
   
     if (!diagramFilePath) {
       // 如果diagramFilePath未定义，打开保存文件对话框让用户选择路径
@@ -196,10 +199,12 @@ function createWindow(): void {
 
   });
 
-  function openFile() {
+   async function openFile() {
     // 获取默认路径
     const userDataPath = app.getPath('userData');
     const diagramPath = path.join(userDataPath, 'diagram');
+
+    await fs.promises.mkdir(diagramPath, { recursive: true });
   
     dialog.showOpenDialog(mainWindow, {
       properties: ['openFile'],

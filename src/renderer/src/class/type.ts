@@ -49,9 +49,19 @@ interface TriangleType extends BasicSymbol{
 }
 
 
+interface TextType extends BasicSymbol{
+    type: "Text";
+    offsetX: number;
+    offsetY: number;
+    show:boolean;
+    content:string;
+}
+
+
 export type {
     RectType,
     TriangleType,
     LineType,
-    ComponentType
+    ComponentType,
+    TextType
 }

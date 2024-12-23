@@ -22,7 +22,7 @@
             class="itemList"
             v-for="child in item.children"
             :key="child.label"
-            @click="toggleItem(item, child.label)"
+            @click="toggleItem(item, child.label);draw();"
             @dblclick="dbtoggleItem(item.label,child.label)"
             :style="child.label === chooseItem ? 'background-color: #dee2e6;' : ''"
           >
@@ -188,7 +188,7 @@ const toggleMenu = (index: number) => {
 const toggleItem = (item, name: string) => {
   chooseItem.value = name
   chooseMenu.value = item.label
-  draw(chooseItem.value)
+
 }
 
 const emit = defineEmits(["placeItem"])
@@ -201,17 +201,74 @@ const dbtoggleItem = (libraryName:string,symbolName: string) => {
   emit("placeItem",libraryName,symbolName)
 }
 
-const draw = async (name: string) => {
-  console.log(canvas.value.width, canvas.value.height)
-  ctx.clearRect(0, 0, canvas.value.width, canvas.value.height)
-  ctx.beginPath()
-  ctx.closePath()
-}
+const draw = () => {
+  
+  ctx.clearRect(0, 0, canvas.value.width, canvas.value.height);
+
+  // 获取当前组件的图标数据
+  const currentComponent = useSymbolStore().$state.currentComponent;
+  console.log(currentComponent);
+  if (!currentComponent) return;
+
+  // 计算画布中心点
+  const canvasCenterX = canvas.value.width / 2;
+  const canvasCenterY = canvas.value.height / 2;
+
+  // 根据图标类型和数据绘制图标
+  switch (currentComponent.type) {
+    case 'Component':
+      // 绘制 tooltip
+      if (currentComponent.toolTip && currentComponent.toolTip.show) {
+        const toolTipX = currentComponent.toolTip.offsetX + canvasCenterX;
+        const toolTipY = currentComponent.toolTip.offsetY + canvasCenterY;
+        drawText(ctx, toolTipX, toolTipY, currentComponent.toolTip.content);
+      }
+
+      // 绘制 pins
+      currentComponent.pins.forEach((pin) => {
+        const fromX = pin.from_offsetX + canvasCenterX;
+        const fromY = pin.from_offsetY + canvasCenterY;
+        const toX = pin.to_offsetX + canvasCenterX;
+        const toY = pin.to_offsetY + canvasCenterY;
+        drawLine(ctx, fromX, fromY, toX, toY);
+      });
+
+      // 绘制 symbols
+      currentComponent.symbols.forEach((symbol) => {
+        if (symbol.type === 'Line') {
+          const fromX = symbol.from_offsetX + canvasCenterX;
+          const fromY = symbol.from_offsetY + canvasCenterY;
+          const toX = symbol.to_offsetX + canvasCenterX;
+          const toY = symbol.to_offsetY + canvasCenterY;
+          drawLine(ctx, fromX, fromY, toX, toY);
+        }
+      });
+      break;
+    // 其他图标类型的绘制逻辑...
+    default:
+      console.log('Unsupported icon type');
+  }
+};
+
+const drawLine = (ctx, fromX, fromY, toX, toY) => {
+  ctx.beginPath();
+  ctx.moveTo(fromX, fromY);
+  ctx.lineTo(toX, toY);
+  ctx.strokeStyle = 'black'; // 设置线条颜色
+  ctx.lineWidth = 2; // 设置线条宽度
+  ctx.stroke(); // 绘制线条
+};
+
+const drawText = (ctx, x, y, text) => {
+  ctx.font = '10px Arial'; // 设置字体样式
+  ctx.fillStyle = 'black'; // 设置文本颜色
+  ctx.fillText(text, x, y); // 绘制文本
+};
 
 window.addEventListener('resize', () => {
   canvas.value.width = canvasDiv.value.clientWidth
   canvas.value.height = canvasDiv.value.clientHeight
-  draw(chooseItem.value)
+  // draw(chooseItem.value)
 })
 
 const closeSymbol = () => {
@@ -249,51 +306,62 @@ main {
     text-overflow: ellipsis;
 
     .serch {
-      width: 100%;
       display: flex;
-      justify-content: center;
       align-items: center;
-      padding: 5px 0;
+    }
 
-      input {
-        width: 90%;
-        outline: none;
-      }
+    .serch input[type="text"] {
+      width: 100%;
+      height: 30px;
+      padding: 0 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      outline: none;
+      transition: border 0.3s ease-in-out;
+    }
+
+    .serch input[type="text"]:focus {
+      border-color: #007bff;
     }
     
   }
 
   .rightPart {
-    flex: 3;
-    height: 100%;
+  flex: 3;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: #f8f9fa; /* 为.rightPart添加一个背景颜色 */
+
+  .canvasDiv {
+    flex: 1;
+    background-color: #ffffff;
+    border: 1px solid #ccc; /* 为canvasDiv添加一个边框 */
+    border-radius: 4px; /* 为canvasDiv添加圆角 */
+    overflow: hidden; /* 如果canvas内容超出，隐藏超出部分 */
+  }
+
+  .infos {
+    flex: 1;
     display: flex;
     flex-direction: column;
+    align-items: center;
 
-    .canvasDiv {
-      flex: 1;
-      background-color: #dee2e6;
-    }
 
-    .infos {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-
-      .info {
-        justify-self: center; /* 水平居中 */
-        align-self: center; /* 垂直居中 */
-        input {
-          width: 50px;
-          border: none;
-          outline: none;
-          border-bottom: 1px solid #1c4f81;
-          text-align: center;
-        }
+    .info {
+      justify-self: center; /* 水平居中 */
+      align-self: center; /* 垂直居中 */
+      input {
+        width: 50px;
+        border: none;
+        outline: none;
+        border-bottom: 1px solid #1c4f81;
+        text-align: center;
+        font-size: 14px; /* 设置字体大小 */
       }
     }
   }
-
+}
   .menuList {
     width: 100%;
     .menuName {

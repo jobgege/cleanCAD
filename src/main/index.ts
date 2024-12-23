@@ -19,7 +19,7 @@ function createWindow(): void {
   })
 
   mainWindow.maximize();
-
+  mainWindow.webContents.openDevTools();
   let template = [
     {
       label: '文件',

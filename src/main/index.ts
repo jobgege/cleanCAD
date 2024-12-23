@@ -91,6 +91,7 @@ function createWindow(): void {
   ];
 
   const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
   mainWindow.setMenu(menu);
 
   mainWindow.on('ready-to-show', () => {
@@ -439,6 +440,7 @@ function createSymbolEditorWindow() {
   });
 
   const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
   symbolEditorWindow.setMenu(menu);
 
   // 加载路由路径 /symbol

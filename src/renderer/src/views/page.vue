@@ -18,7 +18,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { Diagram, Rect , Component } from '../class'
+import { Diagram, Rect , Component , Text } from '../class'
 import { useSymbolStore } from '../store'
 const route = useRoute()
 // 引用 Canvas 元素
@@ -302,7 +302,7 @@ async function createDiagramFromFile(componentsData) {
 
 
 async function createComponentFromFile(componentData) {
-  const { centerX, centerY, toolTip, pins, symbols } = componentData;
+  let { centerX, centerY, toolTip, pins, symbols } = componentData;
   // 创建symbols数组，并等待所有Promise解决
   const symbolInstances = await Promise.all(symbols.map(async (symbol) => {
     const moduleExports = await import('../class/index');
@@ -316,7 +316,8 @@ async function createComponentFromFile(componentData) {
     return currentBasicSymbolInstance;
   }));
   // 创建Component实例
-  const component = new Component(currentSnapPoint.x, currentSnapPoint.y, toolTip, pins, symbolInstances);
+  toolTip = new Text(toolTip.offsetX, toolTip.offsetY,toolTip.show,toolTip.content)
+  const component = new Component(centerX, centerY, toolTip, pins, symbolInstances);
   return component;
 }
 

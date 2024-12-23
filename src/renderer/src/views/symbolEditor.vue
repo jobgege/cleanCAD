@@ -48,6 +48,9 @@
         <svg class="iconNav" ref="addLine" name="Line" aria-hidden="true">
           <use xlink:href="#icon-xianduan"></use>
         </svg>
+        <svg class="iconNav" ref="addText" name="Text" aria-hidden="true">
+          <use xlink:href="#icon-tianjiawenzi"></use>
+        </svg>
       </div>
       <div class="canvasDiv" ref="canvasDiv">
         <canvas ref="canvas"></canvas>
@@ -66,12 +69,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Diagram, Component } from '../class'
+import { Diagram, Component , Text } from '../class'
 
 const canvas = ref(null)
 const canvasDiv = ref(null)
 const addPinIcon = ref()
 const addLine = ref()
+const addText = ref()
 const currentSymbol = ref({} as { name: string; drawFn: Function })
 const mousepos = ref({} as { x: string; y: string })
 const isAddLibrary = ref(false)
@@ -101,6 +105,7 @@ let addPinArray = []
 let addLineArray = []
 let isAddPin = false
 let isAddLine = false
+let isAddText = false
 let isFindToPos = false
 let snapped
 let snappedGridX
@@ -118,7 +123,7 @@ onMounted(async () => {
 
     diagram = new Diagram(ctx)
     resizeCanvas()
-    component.value = new Component(centerX,centerY,{offsetX:0,offsetY:0,content:"",show:true})
+    component.value = new Component(centerX,centerY)
     diagram.addComponent(component.value)
     diagram.render()
 
@@ -146,14 +151,33 @@ onMounted(async () => {
     addPinIcon.value.addEventListener('click', () => {
       isAddPin = true
       isAddLine = false
+      isAddText = false
       addLineArray = []
     })
 
     addLine.value.addEventListener('click', () => {
       isAddLine = true
       isAddPin = false
+      isAddText = false
       addPinArray = []
     })
+
+    addText.value.addEventListener('click',async(e) => {
+      if(!component.value.toolTip){
+        const mouseX = e.offsetX / scale - offsetX
+        const mouseY = e.offsetY / scale - offsetY
+        const BasicSymbolName = addText.value.getAttribute('name')
+        const moduleExports = await import('../class/index')
+        const moduleExportsWithIndexSignature = moduleExports as { [key: string]: any }
+        const BasicSymbol = moduleExportsWithIndexSignature[BasicSymbolName]
+        currentBasicSymbol = new BasicSymbol(mouseX - centerX, mouseY - centerY,true,"nihao")
+        component.value.addToolTip(currentBasicSymbol)
+        isAddText = true
+        isAddLine = false
+        isAddPin = false
+        addPinArray = []
+      }
+    });
 
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' || e.key === 'Esc') {
@@ -163,6 +187,10 @@ onMounted(async () => {
         addSymbolName.value = ''
         isAddPin = false
         isAddLine = false
+        if(isAddText){
+          component.value.removeToolTip()
+          isAddText = false
+        }
         addPinArray = []
         addLineArray = []
         draw()
@@ -229,6 +257,7 @@ onMounted(async () => {
             )
             isAddPin = false
             addPinArray = []
+            draw()
             console.log(JSON.stringify(component.value))
           }
         }
@@ -244,10 +273,7 @@ onMounted(async () => {
             component.value.addSymbol(currentBasicSymbol)
             draw()
             isFindToPos = true
-          } else if (
-            addLineArray.length == 1 &&
-            (addLineArray[0].x != snappedX || addLineArray[0].y != snappedY)
-          ) {
+          } else if (addLineArray.length == 1 &&(addLineArray[0].x != snappedX || addLineArray[0].y != snappedY)) {
             addLineArray.push({ x: snappedX - centerX, y: snappedY - centerY })
             currentBasicSymbol.preview(addLineArray[1].x, addLineArray[1].y)
             addLineArray = []
@@ -256,6 +282,12 @@ onMounted(async () => {
             console.log(JSON.stringify(component.value))
           }
         }
+
+        if(snapped && isAddText){
+          isAddText = false
+          currentBasicSymbol.preview(snappedX - centerX, snappedY - centerY)
+        }
+
       }
     })
 
@@ -279,6 +311,9 @@ onMounted(async () => {
         currentSnapPoint = snapToGridWithThreshold(mouseX, mouseY)
 
         if (isAddLine && isFindToPos) {
+          currentBasicSymbol.preview(mouseX - centerX, mouseY - centerY)
+        }
+        if (isAddText){
           currentBasicSymbol.preview(mouseX - centerX, mouseY - centerY)
         }
 
@@ -475,17 +510,35 @@ const menu = ref([
 
 
 const filteredMenu = computed(() => {
-  if (!searchQuery.value) return menu.value
-  return menu.value.map((item) => {
-    const filteredChildren = item.children.filter((child) =>
-      child.label.includes(searchQuery.value)
-    )
-    return {
-      ...item,
-      children: filteredChildren,
-      isOpen: !!filteredChildren.length
-    }
-  })
+  if (!searchQuery.value) {
+    return menu.value // 如果没有输入搜索条件，返回完整菜单
+  }
+
+  return menu.value
+    .map((item) => {
+      // 过滤出匹配的子项
+      const filteredChildren = item.children.filter((child) =>
+        child.label.toLowerCase().includes(searchQuery.value.toLowerCase())
+      )
+
+      // 父项本身匹配或者有子项匹配时，才保留
+      const hasMatchingChild =
+        filteredChildren.length > 0 ||
+        item.label.toLowerCase().includes(searchQuery.value.toLowerCase())
+
+      // 如果父项匹配搜索关键字，或者有匹配的子项，保留该父项及其所有子项
+      if (hasMatchingChild) {
+        return {
+          ...item,
+          children: item.label.toLowerCase().includes(searchQuery.value.toLowerCase())
+            ? item.children
+            : filteredChildren, // 只返回匹配的子项
+          isOpen: true // 展开匹配的父项
+        }
+      }
+      // 如果父项不匹配，也不包含匹配的子项，则不返回该父项
+    })
+    .filter(Boolean) // 过滤掉未返回的项
 })
 
 const toggleMenu = (index) => {
@@ -510,7 +563,7 @@ const dbtoggleItem = async (libraryLabel,symbolLabel) => {
   chooseItem.value = symbolLabel
   if(JSON.stringify(componentData) == "{}"){
     diagram.removeComponent(component.value)
-    component.value = new Component(centerX,centerY,{offsetX:0,offsetY:0,content:"",show:true})
+    component.value = new Component(centerX,centerY)
     diagram.addComponent(component.value)
     draw()
   }else{
@@ -528,7 +581,7 @@ const dbtoggleItem = async (libraryLabel,symbolLabel) => {
 
 
 async function createComponentFromFile(componentData) {
-  const { centerX, centerY, toolTip, pins, symbols } = componentData;
+  let { centerX, centerY, toolTip, pins, symbols } = componentData;
   // 创建symbols数组，并等待所有Promise解决
   const symbolInstances = await Promise.all(symbols.map(async (symbol) => {
     const moduleExports = await import('../class/index');
@@ -542,6 +595,7 @@ async function createComponentFromFile(componentData) {
     return currentBasicSymbolInstance;
   }));
   // 创建Component实例
+  toolTip = new Text(toolTip.offsetX, toolTip.offsetY,toolTip.show,toolTip.content)
   const component = new Component(centerX, centerY, toolTip, pins, symbolInstances);
   return component;
 }

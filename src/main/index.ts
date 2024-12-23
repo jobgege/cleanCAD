@@ -395,25 +395,17 @@ function createSymbolEditorWindow() {
       // 解析传入的库数据
       const library = JSON.parse(libraryData);
   
-      // 递归创建目录和文件
+      // 创建目录
       for (const lib of library) {
         const libPath = path.join(SymbolLibraryPath, lib.label);
         await fs.promises.mkdir(libPath, { recursive: true });
-  
-        for (const symbol of lib.children) {
-          const symbolPath = path.join(libPath, `${symbol.label}.json`);
-          if (!(await fs.promises.stat(symbolPath)).isFile()) {
-            const fileHandler = await fs.promises.open(symbolPath, 'w');
-            await fileHandler.close();
-          }
-        }
       }
 
       const symbolData = JSON.parse(symbolDataJson)
       const symbolPath = path.join(SymbolLibraryPath,symbolData.libraryName, `${symbolData.symbolName}.json`)
       await fs.promises.writeFile(symbolPath, JSON.stringify(symbolData.content, null, 2), 'utf8');
 
-      dialog.showMessageBox(mainWindow, { message: 'Library saved successfully.' });
+      dialog.showMessageBox(symbolEditorWindow, { message: 'Library saved successfully.' });
       console.log('Library saved successfully');
     } catch (error) {
       console.error('Error saving library:', error);

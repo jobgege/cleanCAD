@@ -1,4 +1,4 @@
-import { ComponentType, BasicSymbol, RectType, LineType, TriangleType } from "./types";
+import { ComponentType, BasicSymbol, RectType, LineType, TriangleType , TextType } from "./types";
 
 class Diagram {
   components: ComponentType[];
@@ -140,12 +140,7 @@ class Component implements ComponentType {
   id: number | undefined;
   centerX: number;
   centerY: number;
-  toolTip: {
-    offsetX: number;
-    offsetY: number;
-    content: string;
-    show: boolean;
-  };
+  toolTip: BasicSymbol | undefined;
   pins: Array<{
     id: number | undefined;
     from_offsetX: number;
@@ -159,12 +154,7 @@ class Component implements ComponentType {
   constructor(
     centerX: number,
     centerY: number,
-    toolTip: {
-      offsetX: number;
-      offsetY: number;
-      content: string;
-      show: boolean;
-    },
+    toolTip:BasicSymbol | undefined = undefined,
     pins: Array<{
       from_offsetX: number;
       from_offsetY: number;
@@ -221,13 +211,20 @@ class Component implements ComponentType {
       ctx.stroke();
     });
 
-    if (this.toolTip.show && this.toolTip.content) {
-      ctx.font = '12px Arial';
-      ctx.fillStyle = 'black';
-      ctx.textAlign = 'center';
-      ctx.fillText(this.toolTip.content, this.centerX + this.toolTip.offsetX, this.centerY + this.toolTip.offsetY);
+    if(this.toolTip){
+      this.toolTip.draw(this.centerX,this.centerY,ctx)
     }
 
+  }
+
+  addToolTip(toolTip:BasicSymbol){
+    this.toolTip = toolTip
+    toolTip.centerX = this.centerX
+    toolTip.centerY = this.centerY
+  }
+
+  removeToolTip() {
+    this.toolTip = undefined
   }
 
   changePos(mouseX:number,mouseY:number){
@@ -302,6 +299,37 @@ class Line extends BasicSymbol implements LineType {
 
 }
 
+class Text extends BasicSymbol implements TextType {
+  type: "Text" = "Text";
+  offsetX: number;
+  offsetY: number;
+  show:boolean;
+  content:string;
+  constructor(offsetX:number, offsetY:number,show:boolean,content:string,draw?: (ctx: CanvasRenderingContext2D) => void){
+    super(offsetX,offsetY,draw?draw:()=>{})
+    this.offsetX = offsetX
+    this.offsetY = offsetY
+    this.show = show
+    this.content = content
+  }
+
+  draw(centerX: number, centerY: number, ctx: CanvasRenderingContext2D): void {
+    if (this.show && this.content) {
+      ctx.font = '10px Arial';
+      ctx.fillStyle = 'black';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(this.content, centerX+this.offsetX, centerY+this.offsetY);
+    }
+  }
+
+  preview(offsetX: number,offsetY:number){
+    this.offsetX = offsetX
+    this.offsetY = offsetY
+  }
+
+}
+
 class Rect extends BasicSymbol implements RectType {
   type: "Rect" = "Rect";
   width: number;
@@ -343,4 +371,4 @@ class Triangle extends BasicSymbol implements TriangleType {
 
 }
 
-export { Diagram, Line, Rect, Triangle, Component };
+export { Diagram, Line, Rect, Triangle, Component ,Text };

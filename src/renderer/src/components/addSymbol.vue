@@ -52,14 +52,14 @@
             <span>:</span>
             <input v-model="symbolInfos[key]"/>
           </div>
-          <div class="tooltip">
+          <!-- <div class="tooltip">
             <span>{{ 'tooltip' }}</span>
-          </div>
-          <div class="info" v-for="(value, key) in symbolInfos.toolTip" :key="key">
+          </div> -->
+          <!-- <div class="info" v-for="(value, key) in symbolInfos.toolTip" :key="key">
             <span>{{ key }}</span>
             <span>:</span>
             <input v-model="symbolInfos.toolTip[key]" />
-          </div>
+          </div> -->
         </template>
       </div>
     </div>
